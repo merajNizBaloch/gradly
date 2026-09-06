@@ -48,8 +48,26 @@ button { cursor: pointer; }
   background-color: transparent !important;
 }
 
-/* Hide only the legacy Design tab. Do not hide sidebar panels by child position. */
-[data-gradly-sidebar-tabs] button:nth-child(3) { display: none !important; }
+/* Result-step navigation belongs after the form, not above it. */
+section.no-print.space-y-4 > [data-gradly-sidebar-tabs-slot] {
+  display: contents !important;
+}
+
+section.no-print.space-y-4 {
+  display: flex !important;
+  flex-direction: column !important;
+}
+
+section.no-print.space-y-4 > [data-gradly-sidebar-tabs-slot] > [data-gradly-sidebar-tabs] {
+  order: 1;
+}
+
+section.no-print.space-y-4 > [data-gradly-sidebar-tabs-slot] > [data-gradly-step-navigation] {
+  order: 999 !important;
+  position: static !important;
+  margin-top: 1rem !important;
+  margin-bottom: 0 !important;
+}
 
 /* The full design library is replaced by the compact expandable control. */
 [data-gradly-hidden-design-library="true"] { display: none !important; }
