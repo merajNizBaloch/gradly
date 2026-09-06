@@ -7,7 +7,7 @@ import { useEffect, useState } from "react";
 export default function OverlayZoom() {
   const [target, setTarget] = useState<HTMLElement | null>(null);
   const [portalHost, setPortalHost] = useState<HTMLElement | null>(null);
-  const [zoom, setZoom] = useState(100);
+  const [zoom, setZoom] = useState(200);
   const [position, setPosition] = useState({ x: 0, y: 0 });
 
   useEffect(() => {
@@ -25,7 +25,7 @@ export default function OverlayZoom() {
       }
 
       if (!next) {
-        setZoom(100);
+        setZoom(200);
         setPosition({ x: 0, y: 0 });
       }
     };
@@ -111,8 +111,8 @@ export default function OverlayZoom() {
 
   if (!portalHost) return null;
 
-  const changeZoom = (amount: number) => setZoom((value) => Math.min(300, Math.max(50, value + amount)));
-  const resetZoom = () => setZoom(100);
+  const changeZoom = (amount: number) => setZoom((value) => Math.min(400, Math.max(50, value + amount)));
+  const resetZoom = () => setZoom(200);
   const resetPosition = () => setPosition({ x: 0, y: 0 });
 
   return createPortal(
