@@ -38,7 +38,7 @@ function canvasToBlob(canvas: HTMLCanvasElement, type: "image/png" | "image/jpeg
       }, type, quality);
     } catch (error) {
       if (error instanceof DOMException && error.name === "SecurityError") {
-        reject(new Error("The browser blocked an image during export. Please try again; Gradly now routes saved images through its export proxy."));
+        reject(new Error("The browser blocked an image during export. Gradly is retrying the image through its safe export path."));
         return;
       }
       reject(error);
@@ -93,12 +93,21 @@ function blobToDataUrl(blob: Blob) {
   });
 }
 
-async function proxyImageToDataUrl(src: string) {
-  const response = await fetch(`/api/image-proxy?url=${encodeURIComponent(src)}`, { cache: "no-store" });
-  if (!response.ok) throw new Error(`Image proxy returned ${response.status}`);
+async function fetchImageBlob(src: string) {
+  const url = new URL(src, window.location.href);
+  const sameOrigin = url.origin === window.location.origin;
+  const response = sameOrigin
+    ? await fetch(url.toString(), { cache: "no-store", credentials: "same-origin" })
+    : await fetch(`/api/image-proxy?url=${encodeURIComponent(url.toString())}`, { cache: "no-store", credentials: "same-origin" });
+
+  if (!response.ok) throw new Error(`Image request failed with ${response.status}`);
   const type = response.headers.get("content-type") || "";
-  if (!type.toLowerCase().startsWith("image/")) throw new Error("The proxied resource is not an image");
-  return blobToDataUrl(await response.blob());
+  if (!type.toLowerCase().startsWith("image/")) throw new Error("The fetched resource is not an image");
+  return response.blob();
+}
+
+async function proxyImageToDataUrl(src: string) {
+  return blobToDataUrl(await fetchImageBlob(src));
 }
 
 async function inlineExportImages(clone: HTMLElement) {
@@ -120,8 +129,7 @@ async function inlineExportImages(clone: HTMLElement) {
     const href = (image.getAttribute("href") || image.getAttributeNS("http://www.w3.org/1999/xlink", "href") || "").trim();
     if (!href || /^(?:data|blob):/i.test(href)) return;
     try {
-      const dataUrl = await proxyImageToDataUrl(href);
-      image.setAttribute("href", dataUrl);
+      image.setAttribute("href", await proxyImageToDataUrl(href));
       image.removeAttributeNS("http://www.w3.org/1999/xlink", "href");
     } catch {
       image.remove();
@@ -132,9 +140,12 @@ async function inlineExportImages(clone: HTMLElement) {
 function removeResidualExternalUrls(clone: HTMLElement) {
   clone.querySelectorAll<HTMLElement>("*").forEach((element) => {
     const style = element.getAttribute("style");
-    if (style && /url\(/i.test(style)) {
-      element.setAttribute("style", style.replace(/url\((?!\s*[\"']?(?:data|blob):)/gi, "none-url(").replace(/none-url\(/gi, "url(none)"));
-    }
+    if (!style || !/url\(/i.test(style)) return;
+    const sanitized = style.replace(/(?:background(?:-image)?\s*:\s*)[^;]*url\([^)]*\)/gi, (match) => {
+      const property = match.toLowerCase().startsWith("background-image") ? "background-image" : "background";
+      return `${property}:none`;
+    });
+    element.setAttribute("style", sanitized);
   });
 
   clone.querySelectorAll<HTMLImageElement>("img").forEach((image) => {
@@ -145,7 +156,7 @@ function removeResidualExternalUrls(clone: HTMLElement) {
   });
 
   clone.querySelectorAll<SVGImageElement>("svg image").forEach((image) => {
-    const href = image.getAttribute("href") || "";
+    const href = image.getAttribute("href") || image.getAttributeNS("http://www.w3.org/1999/xlink", "href") || "";
     if (href && !/^(?:data|blob):/i.test(href)) image.remove();
   });
 }
@@ -170,6 +181,7 @@ async function renderCard() {
 
   try {
     const image = new Image();
+    image.crossOrigin = "anonymous";
     image.decoding = "async";
     await new Promise<void>((resolve, reject) => {
       image.onload = () => resolve();
@@ -335,15 +347,11 @@ export default function ResultDownload() {
       </div>
       <div className="space-y-1">
         {(["png", "jpg", "pdf"] as Format[]).map((format) => {
-          const meta = formatMeta(format);
-          const Icon = meta.icon;
-          const isBusy = busy === format;
-          return (
-            <button key={format} type="button" role="menuitem" disabled={busy !== null} onClick={() => download(format)} className="flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60">
-              <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-slate-100 text-slate-600">{isBusy ? <span className="h-4 w-4 animate-spin rounded-full border-2 border-slate-300 border-t-[#17365D]" /> : <Icon size={16} />}</span>
-              <span className="min-w-0 flex-1"><span className="block text-[11px] font-black text-slate-800">{meta.label}</span><span className="block text-[9px] leading-4 text-slate-400">{isBusy ? "Preparing download…" : meta.description}</span></span>
-            </button>
-          );
+          const meta = formatMeta(format); const Icon = meta.icon; const isBusy = busy === format;
+          return <button key={format} type="button" role="menuitem" disabled={busy !== null} onClick={() => download(format)} className="flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60">
+            <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-slate-100 text-slate-600">{isBusy ? <span className="h-4 w-4 animate-spin rounded-full border-2 border-slate-300 border-t-[#17365D]" /> : <Icon size={16} />}</span>
+            <span className="min-w-0 flex-1"><span className="block text-[11px] font-black text-slate-800">{meta.label}</span><span className="block text-[9px] leading-4 text-slate-400">{isBusy ? "Preparing download…" : meta.description}</span></span>
+          </button>;
         })}
       </div>
       {error && <div className="mt-2 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-[10px] font-semibold leading-4 text-red-700">{error}</div>}
