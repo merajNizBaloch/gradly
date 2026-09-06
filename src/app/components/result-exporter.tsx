@@ -6,11 +6,7 @@ import { Download, FileImage, FileText, X } from "lucide-react";
 const EXPORT_BUTTON_TEXT = "Download / Print";
 type ExportFormat = "pdf" | "jpg" | "png";
 
-type ExportSize = {
-  width: number;
-  height: number;
-};
-
+type ExportSize = { width: number; height: number };
 type JsPdfConstructor = new (options: Record<string, unknown>) => any;
 
 function triggerDownload(dataUrl: string, filename: string) {
@@ -30,9 +26,8 @@ function readScript(url: string) {
   return new Promise<void>((resolve, reject) => {
     const existing = document.querySelector<HTMLScriptElement>(`script[src=\"${url}\"]`);
     if (existing) {
-      if (existing.dataset.loaded === "true") {
-        resolve();
-      } else {
+      if (existing.dataset.loaded === "true") resolve();
+      else {
         existing.addEventListener("load", () => resolve(), { once: true });
         existing.addEventListener("error", () => reject(new Error("Unable to load export library.")), { once: true });
       }
@@ -80,7 +75,7 @@ function copyComputedStyles(source: Element, target: Element) {
     try {
       target.style.setProperty(property, value);
     } catch {
-      // Ignore browser-only declarations that cannot be set inline.
+      // Ignore declarations the browser does not allow inline.
     }
   }
 
@@ -94,57 +89,83 @@ function copyComputedStyles(source: Element, target: Element) {
   });
 }
 
-function getProxyUrl(sourceUrl: string) {
-  return `${window.location.origin}/api/export-image?url=${encodeURIComponent(sourceUrl)}`;
-}
-
-function isExternalHttpUrl(value: string) {
+function absoluteUrl(value: string) {
   try {
-    const url = new URL(value, window.location.href);
-    return (url.protocol === "http:" || url.protocol === "https:") && url.origin !== window.location.origin;
+    return new URL(value, window.location.href).toString();
   } catch {
-    return false;
+    return value;
   }
 }
 
-async function rewriteExternalImages(root: HTMLElement) {
-  const images = Array.from(root.querySelectorAll<HTMLImageElement>("img"));
-  const replacements: Promise<void>[] = [];
+async function imageUrlToDataUrl(url: string): Promise<string> {
+  if (!url || url.startsWith("data:") || url.startsWith("blob:")) return url;
 
-  images.forEach((image) => {
-    const source = image.getAttribute("src") || "";
-    if (!isExternalHttpUrl(source)) return;
+  const resolved = absoluteUrl(url);
+  const response = await fetch(resolved, { credentials: "same-origin", cache: "force-cache" });
+  if (!response.ok) throw new Error(`Unable to load image (${response.status}).`);
 
-    image.crossOrigin = "anonymous";
-    image.src = getProxyUrl(new URL(source, window.location.href).toString());
-    replacements.push(
-      new Promise<void>((resolve) => {
-        const done = () => resolve();
-        image.addEventListener("load", done, { once: true });
-        image.addEventListener("error", done, { once: true });
-      }),
-    );
+  const blob = await response.blob();
+  return await new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result));
+    reader.onerror = () => reject(new Error("Unable to prepare result image for export."));
+    reader.readAsDataURL(blob);
   });
-
-  const allElements = Array.from(root.querySelectorAll<HTMLElement>("*"));
-  allElements.push(root);
-
-  allElements.forEach((element) => {
-    const background = element.style.backgroundImage;
-    if (!background || !/url\(/i.test(background)) return;
-
-    const rewritten = background.replace(/url\((['\"]?)(https?:\/\/[^'\")]+)\1\)/gi, (_match, quote: string, source: string) => {
-      return `url(\"${getProxyUrl(source)}\")`;
-    });
-
-    if (rewritten !== background) element.style.backgroundImage = rewritten;
-  });
-
-  await Promise.all(replacements);
 }
 
-async function cloneForExport(source: HTMLElement, size: ExportSize) {
+function extractBackgroundUrls(value: string) {
+  const urls: string[] = [];
+  const regex = /url\((['\"]?)(.*?)\1\)/gi;
+  let match: RegExpExecArray | null;
+  while ((match = regex.exec(value))) urls.push(match[2]);
+  return urls;
+}
+
+async function inlineImages(root: HTMLElement) {
+  const imageElements = Array.from(root.querySelectorAll<HTMLImageElement>("img"));
+
+  await Promise.all(imageElements.map(async (image) => {
+    const source = image.getAttribute("src") || "";
+    if (!source) return;
+
+    try {
+      const dataUrl = await imageUrlToDataUrl(source);
+      image.setAttribute("src", dataUrl);
+      image.removeAttribute("srcset");
+      image.setAttribute("crossorigin", "anonymous");
+    } catch {
+      throw new Error("A result image could not be prepared for export. Please replace the saved image and try again.");
+    }
+  }));
+
+  const elements = [root, ...Array.from(root.querySelectorAll<HTMLElement>("*"))];
+  for (const element of elements) {
+    const background = element.style.backgroundImage;
+    if (!background || !/url\(/i.test(background)) continue;
+
+    const urls = extractBackgroundUrls(background);
+    let rewritten = background;
+
+    for (const sourceUrl of urls) {
+      try {
+        const dataUrl = await imageUrlToDataUrl(sourceUrl);
+        rewritten = rewritten.replace(sourceUrl, dataUrl);
+      } catch {
+        throw new Error("A result image could not be prepared for export. Please replace the saved image and try again.");
+      }
+    }
+
+    element.style.backgroundImage = rewritten;
+  }
+}
+
+async function buildIsolatedClone(source: HTMLElement) {
+  const size = getExportSize(source);
   const clone = source.cloneNode(true) as HTMLElement;
+
+  clone.querySelectorAll(".no-print").forEach((node) => node.remove());
+  copyComputedStyles(source, clone);
+
   clone.style.width = `${size.width}px`;
   clone.style.height = `${size.height}px`;
   clone.style.maxWidth = "none";
@@ -152,38 +173,42 @@ async function cloneForExport(source: HTMLElement, size: ExportSize) {
   clone.style.margin = "0";
   clone.style.boxShadow = "none";
   clone.style.position = "relative";
+  clone.style.left = "0";
+  clone.style.top = "0";
+
+  // Remove all classes so Tailwind stylesheets cannot introduce unsupported
+  // lab()/oklab() declarations during serialization.
   clone.removeAttribute("class");
+  await inlineImages(clone);
 
-  clone.querySelectorAll(".no-print").forEach((node) => node.remove());
-  copyComputedStyles(source, clone);
-  await rewriteExternalImages(clone);
-
-  return clone;
+  return { clone, size };
 }
 
-async function renderWithBrowser(source: HTMLElement): Promise<{ canvas: HTMLCanvasElement; size: ExportSize }> {
-  const size = getExportSize(source);
-  const clone = await cloneForExport(source, size);
+async function renderToCanvas(source: HTMLElement): Promise<{ canvas: HTMLCanvasElement; size: ExportSize }> {
+  const { clone, size } = await buildIsolatedClone(source);
   const serialized = new XMLSerializer().serializeToString(clone);
-  const svg =
-    `<?xml version="1.0" encoding="UTF-8"?>\n` +
-    `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="${size.width}" height="${size.height}" viewBox="0 0 ${size.width} ${size.height}">` +
-    `<rect width="100%" height="100%" fill="#ffffff"/>` +
-    `<foreignObject x="0" y="0" width="${size.width}" height="${size.height}">` +
-    `<div xmlns="http://www.w3.org/1999/xhtml" style="width:${size.width}px;height:${size.height}px;overflow:hidden;background:#ffffff;">${serialized}</div>` +
-    `</foreignObject></svg>`;
+  const svg = [
+    '<?xml version="1.0" encoding="UTF-8"?>',
+    `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="${size.width}" height="${size.height}" viewBox="0 0 ${size.width} ${size.height}">`,
+    `<rect width="100%" height="100%" fill="#ffffff"/>`,
+    `<foreignObject x="0" y="0" width="${size.width}" height="${size.height}">`,
+    `<div xmlns="http://www.w3.org/1999/xhtml" style="width:${size.width}px;height:${size.height}px;overflow:hidden;background:#ffffff;">${serialized}</div>`,
+    `</foreignObject>`,
+    `</svg>`,
+  ].join("");
 
   const blob = new Blob([svg], { type: "image/svg+xml;charset=utf-8" });
-  const url = URL.createObjectURL(blob);
+  const objectUrl = URL.createObjectURL(blob);
 
   try {
     const image = new Image();
     image.decoding = "async";
+    image.crossOrigin = "anonymous";
 
     await new Promise<void>((resolve, reject) => {
       image.onload = () => resolve();
       image.onerror = () => reject(new Error("Unable to render the result card for export."));
-      image.src = url;
+      image.src = objectUrl;
     });
 
     const scale = Math.min(3, Math.max(2, window.devicePixelRatio || 1));
@@ -201,7 +226,7 @@ async function renderWithBrowser(source: HTMLElement): Promise<{ canvas: HTMLCan
 
     return { canvas, size };
   } finally {
-    URL.revokeObjectURL(url);
+    URL.revokeObjectURL(objectUrl);
   }
 }
 
@@ -241,18 +266,17 @@ export default function ResultExporter() {
       const source = document.querySelector<HTMLElement>(".gradly-paper");
       if (!source) throw new Error("Result card could not be found.");
 
-      const { canvas, size } = await renderWithBrowser(source);
+      const { canvas, size } = await renderToCanvas(source);
       const filenameBase = `gradly-result-${new Date().toISOString().slice(0, 10)}`;
 
-      let dataUrl: string;
       if (format === "png") {
-        dataUrl = dataUrlFromCanvas(canvas, "image/png");
-      } else {
-        dataUrl = dataUrlFromCanvas(canvas, "image/jpeg");
+        triggerDownload(dataUrlFromCanvas(canvas, "image/png"), `${filenameBase}.png`);
+        setOpen(false);
+        return;
       }
 
-      if (format === "png" || format === "jpg") {
-        triggerDownload(dataUrl, `${filenameBase}.${format}`);
+      if (format === "jpg") {
+        triggerDownload(dataUrlFromCanvas(canvas, "image/jpeg"), `${filenameBase}.jpg`);
         setOpen(false);
         return;
       }
@@ -265,12 +289,11 @@ export default function ResultExporter() {
         format: [widthMm, heightMm],
         compress: true,
       });
-      pdf.addImage(dataUrl, "JPEG", 0, 0, widthMm, heightMm, undefined, "FAST");
+      pdf.addImage(dataUrlFromCanvas(canvas, "image/jpeg"), "JPEG", 0, 0, widthMm, heightMm, undefined, "FAST");
       pdf.save(`${filenameBase}.pdf`);
       setOpen(false);
     } catch (cause) {
-      const message = cause instanceof Error ? cause.message : "Could not export the result.";
-      setError(message.includes("Tainted canvases") ? "A result image could not be prepared for export. Please replace the saved image and try again." : message);
+      setError(cause instanceof Error ? cause.message : "Could not export the result.");
     } finally {
       setBusy("");
     }
