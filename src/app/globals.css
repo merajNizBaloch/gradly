@@ -26,6 +26,18 @@ button { cursor: pointer; }
 
 .result-paper { min-height: 1040px; }
 
+/* The result card is a print document, not a responsive web card. */
+.gradly-paper {
+  flex: 0 0 auto !important;
+  flex-shrink: 0 !important;
+  max-width: none !important;
+}
+
+.print-shell {
+  min-width: 0;
+  overflow: auto;
+}
+
 /* Keep result tables translucent so the school-logo watermark remains visible underneath. */
 .gradly-paper table,
 .gradly-paper table tbody,
