@@ -1,5 +1,6 @@
 "use client";
 
+import html2canvas from "html2canvas-pro";
 import { Download, FileImage, FileText } from "lucide-react";
 import { createPortal } from "react-dom";
 import { useEffect, useRef, useState } from "react";
@@ -38,52 +39,12 @@ function canvasToBlob(canvas: HTMLCanvasElement, type: "image/png" | "image/jpeg
       }, type, quality);
     } catch (error) {
       if (error instanceof DOMException && error.name === "SecurityError") {
-        reject(new Error("The browser blocked an image during export. Gradly is retrying the image through its safe export path."));
+        reject(new Error("The browser blocked an image during export."));
         return;
       }
       reject(error);
     }
   });
-}
-
-const STYLE_PROPS = [
-  "box-sizing","display","position","top","right","bottom","left","width","height","min-width","min-height","max-width","max-height","margin","padding","border","border-top","border-right","border-bottom","border-left","border-radius","background","background-color","background-image","background-size","background-position","background-repeat","color","font","font-family","font-size","font-weight","font-style","line-height","letter-spacing","text-align","text-decoration","text-transform","text-indent","white-space","vertical-align","overflow","overflow-wrap","word-break","box-shadow","opacity","transform","transform-origin","flex","flex-direction","flex-wrap","flex-grow","flex-shrink","flex-basis","align-items","align-content","align-self","justify-content","gap","grid-template-columns","grid-template-rows","grid-column","grid-row","object-fit","object-position",
-];
-
-function copyComputedStyles(source: Element, target: Element) {
-  const computed = window.getComputedStyle(source);
-  target.setAttribute(
-    "style",
-    STYLE_PROPS.map((property) => {
-      const value = computed.getPropertyValue(property);
-      return /url\(/i.test(value) && !/url\(\s*[\"']?(?:data|blob):/i.test(value) && (property === "background" || property === "background-image")
-        ? `${property}:none`
-        : `${property}:${value}`;
-    }).join(";") + ";",
-  );
-}
-
-function cloneForExport(card: HTMLElement, width: number, height: number) {
-  const clone = card.cloneNode(true) as HTMLElement;
-  clone.setAttribute("xmlns", "http://www.w3.org/1999/xhtml");
-  clone.style.width = `${width}px`;
-  clone.style.height = `${height}px`;
-  clone.style.minHeight = `${height}px`;
-  clone.style.margin = "0";
-  clone.style.boxShadow = "none";
-  clone.style.overflow = "hidden";
-
-  const sourceElements = [card, ...Array.from(card.querySelectorAll("*"))];
-  const cloneElements = [clone, ...Array.from(clone.querySelectorAll("*"))];
-  sourceElements.forEach((source, index) => {
-    const target = cloneElements[index];
-    if (target instanceof Element) copyComputedStyles(source, target);
-  });
-
-  clone.querySelectorAll<HTMLElement>(".no-print, [data-gradly-download-menu]").forEach((element) => element.remove());
-  clone.querySelectorAll<HTMLElement>("*").forEach((element) => element.removeAttribute("class"));
-  clone.removeAttribute("class");
-  return clone;
 }
 
 function blobToDataUrl(blob: Blob) {
@@ -108,59 +69,43 @@ async function fetchImageBlob(src: string) {
   return response.blob();
 }
 
-async function proxyImageToDataUrl(src: string) {
-  return blobToDataUrl(await fetchImageBlob(src));
-}
-
-async function inlineExportImages(clone: HTMLElement) {
+async function inlineImages(clone: HTMLElement) {
   const images = Array.from(clone.querySelectorAll<HTMLImageElement>("img"));
-  await Promise.all(images.map(async (image) => {
-    const src = (image.getAttribute("src") || "").trim();
-    if (!src || /^(?:data|blob):/i.test(src)) return;
-    try {
-      image.setAttribute("src", await proxyImageToDataUrl(src));
+  await Promise.all(
+    images.map(async (image) => {
+      const src = (image.getAttribute("src") || "").trim();
       image.removeAttribute("srcset");
       image.removeAttribute("sizes");
-    } catch {
-      image.replaceWith(document.createElement("span"));
-    }
-  }));
+      if (!src || /^(?:data|blob):/i.test(src)) return;
+      try {
+        image.src = await blobToDataUrl(await fetchImageBlob(src));
+      } catch {
+        image.removeAttribute("src");
+      }
+    }),
+  );
 
   const svgImages = Array.from(clone.querySelectorAll<SVGImageElement>("svg image"));
-  await Promise.all(svgImages.map(async (image) => {
-    const href = (image.getAttribute("href") || image.getAttributeNS("http://www.w3.org/1999/xlink", "href") || "").trim();
-    if (!href || /^(?:data|blob):/i.test(href)) return;
-    try {
-      image.setAttribute("href", await proxyImageToDataUrl(href));
-      image.removeAttributeNS("http://www.w3.org/1999/xlink", "href");
-    } catch {
-      image.remove();
-    }
-  }));
+  await Promise.all(
+    svgImages.map(async (image) => {
+      const href = (image.getAttribute("href") || image.getAttributeNS("http://www.w3.org/1999/xlink", "href") || "").trim();
+      if (!href || /^(?:data|blob):/i.test(href)) return;
+      try {
+        image.setAttribute("href", await blobToDataUrl(await fetchImageBlob(href)));
+        image.removeAttributeNS("http://www.w3.org/1999/xlink", "href");
+      } catch {
+        image.remove();
+      }
+    }),
+  );
 }
 
-function removeResidualExternalUrls(clone: HTMLElement) {
-  clone.querySelectorAll<HTMLElement>("*").forEach((element) => {
+function stripExternalImageStyles(root: HTMLElement) {
+  root.querySelectorAll<HTMLElement>("*").forEach((element) => {
     const style = element.getAttribute("style");
-    if (!style || !/url\(/i.test(style)) return;
-    const declarations = style.split(";").map((item) => item.trim()).filter(Boolean);
-    const safeDeclarations = declarations.filter((declaration) => {
-      if (!/url\(/i.test(declaration)) return true;
-      return /url\(\s*[\"']?(?:data|blob):/i.test(declaration);
-    });
-    element.setAttribute("style", safeDeclarations.join(";") + (safeDeclarations.length ? ";" : ""));
-  });
-
-  clone.querySelectorAll<HTMLImageElement>("img").forEach((image) => {
-    const src = image.getAttribute("src") || "";
-    if (src && !/^(?:data|blob):/i.test(src)) image.removeAttribute("src");
-    image.removeAttribute("srcset");
-    image.removeAttribute("sizes");
-  });
-
-  clone.querySelectorAll<SVGImageElement>("svg image").forEach((image) => {
-    const href = image.getAttribute("href") || image.getAttributeNS("http://www.w3.org/1999/xlink", "href") || "";
-    if (href && !/^(?:data|blob):/i.test(href)) image.remove();
+    if (!style) return;
+    const cleaned = style.replace(/(background(?:-image)?\s*:\s*)[^;]*url\((?!\s*[\"']?(?:data|blob):)[^)]*\)/gi, "$1none");
+    element.setAttribute("style", cleaned);
   });
 }
 
@@ -171,42 +116,45 @@ async function renderCard() {
   const rect = card.getBoundingClientRect();
   const width = Math.max(1, Math.round(rect.width));
   const height = Math.max(1, Math.round(rect.height));
-  const pixelRatio = Math.min(3, Math.max(2, window.devicePixelRatio || 1));
-  const clone = cloneForExport(card, width, height);
+  const scale = Math.min(3, Math.max(2, window.devicePixelRatio || 1));
+  const clone = card.cloneNode(true) as HTMLElement;
 
-  await inlineExportImages(clone);
-  removeResidualExternalUrls(clone);
+  clone.style.width = `${width}px`;
+  clone.style.height = `${height}px`;
+  clone.style.minHeight = `${height}px`;
+  clone.style.margin = "0";
+  clone.style.transform = "none";
+  clone.style.boxShadow = "none";
+  clone.style.position = "fixed";
+  clone.style.left = "-100000px";
+  clone.style.top = "0";
+  clone.style.zIndex = "-1";
+  clone.querySelectorAll<HTMLElement>(".no-print, [data-gradly-download-menu]").forEach((element) => element.remove());
 
-  const serialized = new XMLSerializer().serializeToString(clone);
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xhtml="http://www.w3.org/1999/xhtml" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}"><foreignObject width="100%" height="100%">${serialized}</foreignObject></svg>`;
-  const svgBlob = new Blob([svg], { type: "image/svg+xml;charset=utf-8" });
-  const svgUrl = URL.createObjectURL(svgBlob);
+  document.body.appendChild(clone);
 
   try {
-    const image = new Image();
-    image.crossOrigin = "anonymous";
-    image.decoding = "async";
-    await new Promise<void>((resolve, reject) => {
-      image.onload = () => resolve();
-      image.onerror = () => reject(new Error("The browser could not render the result card for download."));
-      image.src = svgUrl;
+    await inlineImages(clone);
+    stripExternalImageStyles(clone);
+
+    const canvas = await html2canvas(clone, {
+      width,
+      height,
+      scale,
+      useCORS: true,
+      allowTaint: false,
+      foreignObjectRendering: false,
+      backgroundColor: "#ffffff",
+      imageTimeout: 15000,
+      logging: false,
+      onclone: (clonedDocument) => {
+        clonedDocument.querySelectorAll<HTMLElement>(".no-print, [data-gradly-download-menu]").forEach((element) => element.remove());
+      },
     });
 
-    const canvas = document.createElement("canvas");
-    canvas.width = Math.max(1, Math.round(width * pixelRatio));
-    canvas.height = Math.max(1, Math.round(height * pixelRatio));
-    const context = canvas.getContext("2d", { alpha: false });
-    if (!context) throw new Error("Your browser could not create an export canvas.");
-
-    context.fillStyle = "#ffffff";
-    context.fillRect(0, 0, canvas.width, canvas.height);
-    context.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
-    context.drawImage(image, 0, 0, width, height);
-    context.setTransform(1, 0, 0, 1, 0, 0);
-
-    return { canvas, pixelRatio };
+    return { canvas, pixelRatio: scale };
   } finally {
-    URL.revokeObjectURL(svgUrl);
+    clone.remove();
   }
 }
 
@@ -242,10 +190,16 @@ async function createPdfBlob(canvas: HTMLCanvasElement, pixelRatio: number) {
   const chunks: Uint8Array[] = [header];
   const offsets: number[] = [0];
   let cursor = header.length;
-  objects.forEach((object, index) => { offsets[index + 1] = cursor; chunks.push(object); cursor += object.length; });
+  objects.forEach((object, index) => {
+    offsets[index + 1] = cursor;
+    chunks.push(object);
+    cursor += object.length;
+  });
   const xrefOffset = cursor;
   let xref = `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n`;
-  for (let index = 1; index <= objects.length; index += 1) xref += `${String(offsets[index]).padStart(10, "0")} 00000 n \n`;
+  for (let index = 1; index <= objects.length; index += 1) {
+    xref += `${String(offsets[index]).padStart(10, "0")} 00000 n \n`;
+  }
   const trailer = asciiBytes(`${xref}trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xrefOffset}\n%%EOF\n`);
   return new Blob([...chunks, trailer], { type: "application/pdf" });
 }
@@ -253,8 +207,14 @@ async function createPdfBlob(canvas: HTMLCanvasElement, pixelRatio: number) {
 async function exportResult(format: Format) {
   const { canvas, pixelRatio } = await renderCard();
   const baseName = getFileName();
-  if (format === "png") return downloadBlob(await canvasToBlob(canvas, "image/png"), `${baseName}.png`);
-  if (format === "jpg") return downloadBlob(await canvasToBlob(canvas, "image/jpeg", 0.95), `${baseName}.jpg`);
+  if (format === "png") {
+    downloadBlob(await canvasToBlob(canvas, "image/png"), `${baseName}.png`);
+    return;
+  }
+  if (format === "jpg") {
+    downloadBlob(await canvasToBlob(canvas, "image/jpeg", 0.95), `${baseName}.jpg`);
+    return;
+  }
   downloadBlob(await createPdfBlob(canvas, pixelRatio), `${baseName}.pdf`);
 }
 
@@ -302,6 +262,7 @@ export default function ResultDownload() {
       button.addEventListener("click", onClick, true);
       cleanupRef.current = () => button.removeEventListener("click", onClick, true);
     };
+
     findButton();
     const observer = new MutationObserver(findButton);
     observer.observe(document.body, { childList: true, subtree: true, characterData: true });
