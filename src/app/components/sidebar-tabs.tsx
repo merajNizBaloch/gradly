@@ -1,7 +1,7 @@
 "use client";
 
 import { BarChart3, FileText, ImagePlus, PenLine, School, Upload, X, ZoomIn } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 
 type TabId = "marks" | "remarks" | "design";
@@ -30,89 +30,12 @@ function applyProfileToPage(profile: Profile) {
   window.dispatchEvent(new CustomEvent("gradly-school-profile", { detail: profile }));
 }
 
-function Field({ label, value, onChange, placeholder }: { label: string; value: string; onChange: (value: string) => void; placeholder: string }) { return <label className="block"><span className="mb-1.5 block text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-500">{label}</span><input value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} className="w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm font-semibold text-slate-800 outline-none transition focus:border-[#17365D] focus:ring-4 focus:ring-[#17365D]/10" /></label>; }
+function Field({ label, value, onChange, placeholder, field }: { label: string; value: string; onChange: (value: string) => void; placeholder: string; field: string }) {
+  return <label className="block"><span className="mb-1.5 block text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-500">{label}</span><input data-gradly-school-field={field} value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} className="w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm font-semibold text-slate-800 outline-none transition focus:border-[#17365D] focus:ring-4 focus:ring-[#17365D]/10" /></label>;
+}
 
-function LivePrintedResultPreview({ draft, base }: { draft: Profile; base: Profile }) {
-  const targetRef = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    const source = document.querySelector<HTMLElement>(".gradly-paper");
-    const target = targetRef.current;
-    if (!source || !target) return;
-
-    const sourceRect = source.getBoundingClientRect();
-    const sourceWidth = Math.max(1, sourceRect.width);
-    const sourceHeight = Math.max(1, sourceRect.height);
-    const clone = source.cloneNode(true) as HTMLElement;
-    clone.querySelectorAll("script,button,input,textarea,select,.no-print").forEach((node) => node.remove());
-
-    const replaceText = (from: string, to: string) => {
-      if (!from || from === to) return;
-      const walker = document.createTreeWalker(clone, NodeFilter.SHOW_TEXT);
-      const nodes: Text[] = [];
-      let current: Node | null = walker.nextNode();
-      while (current) { if (current.nodeValue?.includes(from)) nodes.push(current as Text); current = walker.nextNode(); }
-      nodes.forEach((node) => { node.nodeValue = node.nodeValue?.split(from).join(to) ?? node.nodeValue; });
-    };
-    replaceText(base.name, draft.name); replaceText(base.motto, draft.motto); replaceText(base.address, draft.address); replaceText(base.contact, draft.contact);
-
-    const logo = clone.querySelector<HTMLImageElement>("img[alt='School logo']");
-    if (logo) { if (draft.logo) { logo.src = draft.logo; logo.style.transform = `translate(${draft.x}%, ${draft.y}%) scale(${draft.zoom / 100})`; } else logo.remove(); }
-
-    // Keep the cloned card at the exact rendered print dimensions. Only the
-    // outer transform is allowed to scale it to fit the available preview area.
-    clone.style.width = `${sourceWidth}px`;
-    clone.style.height = `${sourceHeight}px`;
-    clone.style.minWidth = `${sourceWidth}px`;
-    clone.style.minHeight = `${sourceHeight}px`;
-    clone.style.maxWidth = "none";
-    clone.style.maxHeight = "none";
-    clone.style.flex = "none";
-    clone.style.margin = "0";
-    clone.style.boxShadow = "none";
-    clone.style.transform = "none";
-    clone.style.aspectRatio = "auto";
-    clone.style.backgroundImage = draft.logo ? `linear-gradient(rgba(255,255,255,${draft.removeWhite ? 0.72 : 0.90}),rgba(255,255,255,${draft.removeWhite ? 0.72 : 0.90})),url(\"${draft.logo}\")` : "none";
-    clone.style.backgroundPosition = `${50 + draft.x}% ${50 + draft.y}%`;
-    clone.style.backgroundSize = `${48 * draft.zoom / 100}% auto`;
-    clone.style.backgroundRepeat = "no-repeat";
-
-    const frame = document.createElement("div");
-    frame.style.position = "relative";
-    frame.style.width = "100%";
-    frame.style.height = "100%";
-    frame.style.minWidth = "0";
-    frame.style.minHeight = "0";
-    frame.style.overflow = "hidden";
-
-    const scaleHost = document.createElement("div");
-    scaleHost.style.position = "absolute";
-    scaleHost.style.left = "0";
-    scaleHost.style.top = "0";
-    scaleHost.style.width = `${sourceWidth}px`;
-    scaleHost.style.height = `${sourceHeight}px`;
-    scaleHost.style.transformOrigin = "top left";
-    scaleHost.style.transform = "scale(1)";
-    scaleHost.appendChild(clone);
-    frame.appendChild(scaleHost);
-    target.replaceChildren(frame);
-
-    const updateScale = () => {
-      const availableWidth = Math.max(1, target.clientWidth - 24);
-      const availableHeight = Math.max(1, target.clientHeight - 24);
-      const scale = Math.min(1, availableWidth / sourceWidth, availableHeight / sourceHeight);
-      scaleHost.style.transform = `scale(${scale})`;
-      frame.style.width = `${Math.max(1, sourceWidth * scale)}px`;
-      frame.style.height = `${Math.max(1, sourceHeight * scale)}px`;
-      frame.style.margin = "0 auto";
-    };
-
-    updateScale();
-    const resizeObserver = new ResizeObserver(updateScale);
-    resizeObserver.observe(target);
-    return () => resizeObserver.disconnect();
-  }, [draft, base]);
-
-  return <div className="flex min-h-0 flex-col rounded-2xl border border-slate-200 bg-slate-100 p-3 shadow-inner"><div className="mb-2 flex shrink-0 items-center justify-between px-1"><div><span className="text-[9px] font-extrabold uppercase tracking-[0.16em] text-slate-400">Printed result preview</span><p className="mt-0.5 text-[10px] text-slate-400">The actual result-card layout, scaled for editing.</p></div><span className="rounded-full bg-emerald-50 px-2 py-1 text-[9px] font-bold text-emerald-600">LIVE</span></div><div className="min-h-0 flex-1 overflow-auto rounded-xl border border-slate-300 bg-slate-200/70 p-3"><div ref={targetRef} className="mx-auto h-full w-full overflow-hidden rounded-md bg-white shadow-lg" /></div></div>;
+function LivePrintedResultPreview() {
+  return <div className="flex min-h-0 flex-col rounded-2xl border border-slate-200 bg-slate-100 p-3 shadow-inner"><div className="mb-2 flex shrink-0 items-center justify-between px-1"><div><span className="text-[9px] font-extrabold uppercase tracking-[0.16em] text-slate-400">Printed result preview</span><p className="mt-0.5 text-[10px] text-slate-400">The actual result-card layout, scaled for editing.</p></div><span className="rounded-full bg-emerald-50 px-2 py-1 text-[9px] font-bold text-emerald-600">LIVE</span></div><div className="min-h-[360px] min-w-0 flex-1 overflow-hidden rounded-xl border border-slate-300 bg-slate-200/70 p-3"><div data-gradly-preview-target className="relative h-full min-h-[330px] w-full min-w-0 overflow-hidden rounded-md bg-white shadow-lg" /></div></div>;
 }
 
 export default function SidebarTabs() {
@@ -136,6 +59,7 @@ export default function SidebarTabs() {
   useEffect(() => { if (!sidebarMount) return; const sidebar = sidebarMount.parentElement; if (!sidebar) return; const panels = Array.from(sidebar.children).filter((node): node is HTMLElement => node instanceof HTMLElement && node !== sidebarMount && !node.hasAttribute("data-gradly-sidebar-tabs-slot")); panels.forEach((panel) => { const title = panel.querySelector(".mb-4")?.textContent?.trim() ?? ""; panel.style.display = panelGroups[active].some((name) => title.includes(name)) ? "" : "none"; }); return () => panels.forEach((panel) => (panel.style.display = "")); }, [active, sidebarMount]);
   useEffect(() => { if (!schoolOpen) return; const onKeyDown = (e: KeyboardEvent) => e.key === "Escape" && setSchoolOpen(false); window.addEventListener("keydown", onKeyDown); return () => window.removeEventListener("keydown", onKeyDown); }, [schoolOpen]);
   useEffect(() => { if (schoolOpen) setDraft(profile); }, [schoolOpen, profile]);
+  useEffect(() => { if (schoolOpen) window.dispatchEvent(new CustomEvent("gradly-school-profile-draft", { detail: draft })); }, [draft, schoolOpen]);
 
   const chooseLogo = (file: File | undefined) => { if (!file) return; const reader = new FileReader(); reader.onload = async () => { const raw = String(reader.result); const logo = draft.removeWhite ? await removeWhiteFromImage(raw) : raw; setDraft((p) => ({ ...p, logo })); }; reader.readAsDataURL(file); };
   const saveProfile = () => { try { localStorage.setItem(STORAGE_KEY, JSON.stringify(draft)); } catch {} setProfile(draft); setSaved(true); applyProfileToPage(draft); setSchoolOpen(false); };
@@ -148,10 +72,10 @@ export default function SidebarTabs() {
     <div className="flex shrink-0 items-center justify-between border-b border-slate-100 bg-[#fbfbf9] px-5 py-4 sm:px-7"><div className="flex items-center gap-3"><span className="grid h-10 w-10 place-items-center rounded-xl bg-[#17365D] text-white"><School size={18} /></span><div><h2 id="gradly-school-dialog-title" className="text-lg font-black text-slate-900">School profile</h2><p className="text-xs text-slate-500">Edit the complete school identity and preview it before saving.</p></div></div><button type="button" onClick={() => setSchoolOpen(false)} className="grid h-9 w-9 place-items-center rounded-full border border-slate-200 text-slate-500 hover:bg-slate-100" aria-label="Close"><X size={17}/></button></div>
     <div className="grid min-h-0 flex-1 overflow-auto lg:grid-cols-[390px_minmax(0,1fr)]">
       <div className="space-y-4 overflow-y-auto border-b border-slate-100 bg-[#fbfbf9] p-5 sm:p-6 lg:border-b-0 lg:border-r">
-        <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"><div className="mb-4 flex items-center justify-between"><div><h3 className="text-sm font-black text-slate-900">School identity</h3><p className="text-[11px] text-slate-400">These values appear on the printed card.</p></div><School size={17} className="text-[#17365D]"/></div><div className="space-y-3"><Field label="School name" value={draft.name} onChange={(v) => setDraft((p) => ({ ...p, name: v }))} placeholder="School name"/><Field label="Motto" value={draft.motto} onChange={(v) => setDraft((p) => ({ ...p, motto: v }))} placeholder="School motto"/><Field label="School address" value={draft.address} onChange={(v) => setDraft((p) => ({ ...p, address: v }))} placeholder="School address"/><Field label="Phone / contact" value={draft.contact} onChange={(v) => setDraft((p) => ({ ...p, contact: v }))} placeholder="Phone, email or website"/></div></div>
+        <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"><div className="mb-4 flex items-center justify-between"><div><h3 className="text-sm font-black text-slate-900">School identity</h3><p className="text-[11px] text-slate-400">These values appear on the printed card.</p></div><School size={17} className="text-[#17365D]"/></div><div className="space-y-3"><Field label="School name" field="school" value={draft.name} onChange={(v) => setDraft((p) => ({ ...p, name: v }))} placeholder="School name"/><Field label="Motto" field="motto" value={draft.motto} onChange={(v) => setDraft((p) => ({ ...p, motto: v }))} placeholder="School motto"/><Field label="School address" field="address" value={draft.address} onChange={(v) => setDraft((p) => ({ ...p, address: v }))} placeholder="School address"/><Field label="Phone / contact" field="contact" value={draft.contact} onChange={(v) => setDraft((p) => ({ ...p, contact: v }))} placeholder="Phone, email or website"/></div></div>
         <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"><div className="mb-4 flex items-center justify-between"><div><h3 className="text-sm font-black text-slate-900">Logo editor</h3><p className="text-[11px] text-slate-400">The same adjustments are used on the printed result.</p></div><ImagePlus size={17} className="text-[#17365D]"/></div><div className="flex items-center gap-3 rounded-xl border border-dashed border-slate-300 bg-slate-50 p-3"><div className="grid h-16 w-16 shrink-0 place-items-center overflow-hidden rounded-xl border border-slate-200 bg-white">{draft.logo ? <img src={draft.logo} alt="School logo editor" className="h-full w-full object-contain" style={{transform:`translate(${draft.x}%,${draft.y}%) scale(${draft.zoom/100})`}}/>:<School size={23} className="text-slate-300"/>}</div><div className="min-w-0 flex-1"><p className="truncate text-xs font-bold text-slate-700">{draft.logo ? "Logo selected" : "No logo selected"}</p><label className="mt-2 inline-flex cursor-pointer items-center gap-1.5 rounded-lg bg-[#17365D] px-3 py-2 text-[11px] font-extrabold text-white"><Upload size={13}/>{draft.logo ? "Replace logo" : "Upload logo"}<input type="file" accept="image/*" className="hidden" onChange={(e)=>chooseLogo(e.target.files?.[0])}/></label></div></div>{draft.logo && <div className="mt-4 space-y-3"><label className="flex items-center justify-between rounded-xl border border-slate-200 px-3 py-2.5"><span><span className="block text-xs font-bold text-slate-700">Remove white background</span><span className="block text-[10px] text-slate-400">Make white pixels transparent.</span></span><input type="checkbox" checked={draft.removeWhite} onChange={async(e)=>{const checked=e.target.checked;if(checked&&draft.logo){const raw=await removeWhiteFromImage(draft.logo);setDraft(p=>({...p,removeWhite:true,logo:raw}));}else setDraft(p=>({...p,removeWhite:false}));}}/></label><div><div className="mb-1 flex items-center justify-between text-[10px] font-bold uppercase tracking-wider text-slate-400"><span className="flex items-center gap-1"><ZoomIn size={12}/>Zoom</span><b className="text-slate-600">{draft.zoom}%</b></div><input type="range" min="60" max="180" value={draft.zoom} onChange={(e)=>setDraft(p=>({...p,zoom:Number(e.target.value)}))} className="w-full accent-[#17365D]"/></div><div><div className="mb-1 flex items-center justify-between text-[10px] font-bold uppercase tracking-wider text-slate-400"><span>Horizontal position</span><b className="text-slate-600">{draft.x}</b></div><input type="range" min="-20" max="20" value={draft.x} onChange={(e)=>setDraft(p=>({...p,x:Number(e.target.value)}))} className="w-full accent-[#17365D]"/></div><div><div className="mb-1 flex items-center justify-between text-[10px] font-bold uppercase tracking-wider text-slate-400"><span>Vertical position</span><b className="text-slate-600">{draft.y}</b></div><input type="range" min="-20" max="20" value={draft.y} onChange={(e)=>setDraft(p=>({...p,y:Number(e.target.value)}))} className="w-full accent-[#17365D]"/></div><button type="button" onClick={()=>setDraft(p=>({...p,zoom:100,x:0,y:0}))} className="text-[11px] font-bold text-[#17365D] hover:underline">Reset logo adjustment</button></div>}</div>
       </div>
-      <div className="min-h-0 bg-slate-100 p-4 sm:p-6"><LivePrintedResultPreview draft={draft} base={profile}/></div>
+      <div className="min-h-0 bg-slate-100 p-4 sm:p-6"><LivePrintedResultPreview /></div>
     </div>
     <div className="flex shrink-0 flex-col gap-2 border-t border-slate-100 bg-white px-5 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-7"><div className="text-[10px] text-slate-400">Preview is the actual result card. Nothing changes on the real card until you save.</div><div className="flex gap-2"><button type="button" onClick={()=>{setDraft(profile);setSchoolOpen(false)}} className="rounded-xl border border-slate-200 px-4 py-2.5 text-xs font-bold text-slate-600 hover:bg-slate-50">Cancel</button><button type="button" onClick={saveProfile} className="rounded-xl bg-[#17365D] px-5 py-2.5 text-xs font-extrabold text-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">Save school profile</button></div></div>
   </div></div>, document.body) : null;
