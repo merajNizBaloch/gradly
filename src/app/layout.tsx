@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import SiteFooter from "./components/site-footer";
+import SidebarTabs from "./components/sidebar-tabs";
 
 export const metadata: Metadata = {
   title: "Gradly — Student Result Generator",
@@ -12,6 +13,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
     <html lang="en">
       <body>
         {children}
+        <SidebarTabs />
         <SiteFooter />
       </body>
     </html>
