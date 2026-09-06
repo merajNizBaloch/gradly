@@ -81,6 +81,8 @@ function cloneForExport(card: HTMLElement, width: number, height: number) {
   });
 
   clone.querySelectorAll<HTMLElement>(".no-print, [data-gradly-download-menu]").forEach((element) => element.remove());
+  clone.querySelectorAll<HTMLElement>("*").forEach((element) => element.removeAttribute("class"));
+  clone.removeAttribute("class");
   return clone;
 }
 
@@ -141,11 +143,12 @@ function removeResidualExternalUrls(clone: HTMLElement) {
   clone.querySelectorAll<HTMLElement>("*").forEach((element) => {
     const style = element.getAttribute("style");
     if (!style || !/url\(/i.test(style)) return;
-    const sanitized = style.replace(/(?:background(?:-image)?\s*:\s*)[^;]*url\([^)]*\)/gi, (match) => {
-      const property = match.toLowerCase().startsWith("background-image") ? "background-image" : "background";
-      return `${property}:none`;
+    const declarations = style.split(";").map((item) => item.trim()).filter(Boolean);
+    const safeDeclarations = declarations.filter((declaration) => {
+      if (!/url\(/i.test(declaration)) return true;
+      return /url\(\s*[\"']?(?:data|blob):/i.test(declaration);
     });
-    element.setAttribute("style", sanitized);
+    element.setAttribute("style", safeDeclarations.join(";") + (safeDeclarations.length ? ";" : ""));
   });
 
   clone.querySelectorAll<HTMLImageElement>("img").forEach((image) => {
