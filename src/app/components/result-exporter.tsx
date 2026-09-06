@@ -72,8 +72,6 @@ function copyComputedStyles(source: Element, target: Element) {
   const computed = window.getComputedStyle(source);
   for (let index = 0; index < computed.length; index += 1) {
     const property = computed.item(index);
-    // Custom properties can still contain lab()/oklab() tokens. They are not
-    // needed because every normal visual property is copied from computed CSS.
     if (property.startsWith("--")) continue;
 
     const value = computed.getPropertyValue(property);
@@ -96,7 +94,56 @@ function copyComputedStyles(source: Element, target: Element) {
   });
 }
 
-function cloneForExport(source: HTMLElement, size: ExportSize) {
+function getProxyUrl(sourceUrl: string) {
+  return `${window.location.origin}/api/export-image?url=${encodeURIComponent(sourceUrl)}`;
+}
+
+function isExternalHttpUrl(value: string) {
+  try {
+    const url = new URL(value, window.location.href);
+    return (url.protocol === "http:" || url.protocol === "https:") && url.origin !== window.location.origin;
+  } catch {
+    return false;
+  }
+}
+
+async function rewriteExternalImages(root: HTMLElement) {
+  const images = Array.from(root.querySelectorAll<HTMLImageElement>("img"));
+  const replacements: Promise<void>[] = [];
+
+  images.forEach((image) => {
+    const source = image.getAttribute("src") || "";
+    if (!isExternalHttpUrl(source)) return;
+
+    image.crossOrigin = "anonymous";
+    image.src = getProxyUrl(new URL(source, window.location.href).toString());
+    replacements.push(
+      new Promise<void>((resolve) => {
+        const done = () => resolve();
+        image.addEventListener("load", done, { once: true });
+        image.addEventListener("error", done, { once: true });
+      }),
+    );
+  });
+
+  const allElements = Array.from(root.querySelectorAll<HTMLElement>("*"));
+  allElements.push(root);
+
+  allElements.forEach((element) => {
+    const background = element.style.backgroundImage;
+    if (!background || !/url\(/i.test(background)) return;
+
+    const rewritten = background.replace(/url\((['\"]?)(https?:\/\/[^'\")]+)\1\)/gi, (_match, quote: string, source: string) => {
+      return `url(\"${getProxyUrl(source)}\")`;
+    });
+
+    if (rewritten !== background) element.style.backgroundImage = rewritten;
+  });
+
+  await Promise.all(replacements);
+}
+
+async function cloneForExport(source: HTMLElement, size: ExportSize) {
   const clone = source.cloneNode(true) as HTMLElement;
   clone.style.width = `${size.width}px`;
   clone.style.height = `${size.height}px`;
@@ -109,15 +156,17 @@ function cloneForExport(source: HTMLElement, size: ExportSize) {
 
   clone.querySelectorAll(".no-print").forEach((node) => node.remove());
   copyComputedStyles(source, clone);
+  await rewriteExternalImages(clone);
 
   return clone;
 }
 
 async function renderWithBrowser(source: HTMLElement): Promise<{ canvas: HTMLCanvasElement; size: ExportSize }> {
   const size = getExportSize(source);
-  const clone = cloneForExport(source, size);
+  const clone = await cloneForExport(source, size);
   const serialized = new XMLSerializer().serializeToString(clone);
-  const svg = `<?xml version="1.0" encoding="UTF-8"?>\n` +
+  const svg =
+    `<?xml version="1.0" encoding="UTF-8"?>\n` +
     `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="${size.width}" height="${size.height}" viewBox="0 0 ${size.width} ${size.height}">` +
     `<rect width="100%" height="100%" fill="#ffffff"/>` +
     `<foreignObject x="0" y="0" width="${size.width}" height="${size.height}">` +
@@ -195,14 +244,15 @@ export default function ResultExporter() {
       const { canvas, size } = await renderWithBrowser(source);
       const filenameBase = `gradly-result-${new Date().toISOString().slice(0, 10)}`;
 
+      let dataUrl: string;
       if (format === "png") {
-        triggerDownload(dataUrlFromCanvas(canvas, "image/png"), `${filenameBase}.png`);
-        setOpen(false);
-        return;
+        dataUrl = dataUrlFromCanvas(canvas, "image/png");
+      } else {
+        dataUrl = dataUrlFromCanvas(canvas, "image/jpeg");
       }
 
-      if (format === "jpg") {
-        triggerDownload(dataUrlFromCanvas(canvas, "image/jpeg"), `${filenameBase}.jpg`);
+      if (format === "png" || format === "jpg") {
+        triggerDownload(dataUrl, `${filenameBase}.${format}`);
         setOpen(false);
         return;
       }
@@ -215,11 +265,12 @@ export default function ResultExporter() {
         format: [widthMm, heightMm],
         compress: true,
       });
-      pdf.addImage(dataUrlFromCanvas(canvas, "image/jpeg"), "JPEG", 0, 0, widthMm, heightMm, undefined, "FAST");
+      pdf.addImage(dataUrl, "JPEG", 0, 0, widthMm, heightMm, undefined, "FAST");
       pdf.save(`${filenameBase}.pdf`);
       setOpen(false);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Could not export the result.");
+      const message = cause instanceof Error ? cause.message : "Could not export the result.";
+      setError(message.includes("Tainted canvases") ? "A result image could not be prepared for export. Please replace the saved image and try again." : message);
     } finally {
       setBusy("");
     }
