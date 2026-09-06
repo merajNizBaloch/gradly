@@ -5,6 +5,7 @@ import SidebarTabs from "./components/sidebar-tabs";
 import ResultPreviewFix from "./components/result-preview-fix";
 import OverlayZoom from "./components/overlay-zoom";
 import CompactDesignControl from "./components/compact-design-control";
+import ResultStepWorkflow from "./components/result-step-workflow";
 
 export const metadata: Metadata = {
   title: "Gradly — Student Result Generator",
@@ -18,6 +19,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
         {children}
         <CompactDesignControl />
         <SidebarTabs />
+        <ResultStepWorkflow />
         <ResultPreviewFix />
         <OverlayZoom />
         <SiteFooter />
