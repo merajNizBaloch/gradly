@@ -24,7 +24,9 @@ function sanitizeFileName(value: string) {
 function getFileName() {
   const card = document.querySelector<HTMLElement>(".gradly-paper");
   const text = card?.textContent?.replace(/\s+/g, " ").trim() || "";
-  const match = text.match(/Student\s+([^·|]+?)(?:\s+Father|\s+Roll\s+Number|\s+Class\s*&\s*Section)/i);
+  const match = text.match(
+    /Student\s+([^·|]+?)(?:\s+Father|\s+Roll\s+Number|\s+Class\s*&\s*Section)/i,
+  );
   const studentName = match?.[1]?.trim();
 
   return `gradly-${sanitizeFileName(studentName || "student-result")}`;
@@ -45,8 +47,16 @@ function canvasToBlob(canvas: HTMLCanvasElement, type: string, quality?: number)
   return new Promise<Blob>((resolve, reject) => {
     canvas.toBlob(
       (blob) => {
-        if (blob) resolve(blob);
-        else reject(new Error(`Could not create ${type.includes("jpeg") ? "JPG" : "PNG"} image.`));
+        if (blob) {
+          resolve(blob);
+          return;
+        }
+
+        reject(
+          new Error(
+            `Could not create ${type.includes("jpeg") ? "JPG" : "PNG"} image.`,
+          ),
+        );
       },
       type,
       quality,
@@ -58,30 +68,39 @@ async function renderCard() {
   const card = document.querySelector<HTMLElement>(".gradly-paper");
   if (!card) throw new Error("The result card is not ready for download.");
 
-  const html2canvasModule = await import("html2canvas");
-  const html2canvas = html2canvasModule.default;
+  const { toCanvas } = await import("html-to-image");
   const pixelRatio = Math.min(3, Math.max(2, window.devicePixelRatio || 1));
 
-  return html2canvas(card, {
-    backgroundColor: "#ffffff",
-    scale: pixelRatio,
-    useCORS: true,
-    allowTaint: false,
-    logging: false,
-    imageTimeout: 15000,
-    removeContainer: true,
-    onclone: (clonedDocument) => {
-      const clonedCard = clonedDocument.querySelector<HTMLElement>(".gradly-paper");
-      if (clonedCard) {
-        clonedCard.classList.add("gradly-export-card");
-        clonedCard.style.boxShadow = "none";
-      }
-    },
-  });
+  try {
+    const canvas = await toCanvas(card, {
+      backgroundColor: "#ffffff",
+      pixelRatio,
+      cacheBust: true,
+      skipFonts: true,
+      filter: (node) => {
+        if (node instanceof HTMLElement) {
+          return !node.classList.contains("no-print") &&
+            !node.hasAttribute("data-gradly-download-menu");
+        }
+        return true;
+      },
+    });
+
+    if (!canvas.width || !canvas.height) {
+      throw new Error("The result card produced an empty image.");
+    }
+
+    return { canvas, pixelRatio };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unknown rendering error.";
+    throw new Error(
+      `Could not render the result card. ${message}`,
+    );
+  }
 }
 
 async function exportResult(format: Format) {
-  const canvas = await renderCard();
+  const { canvas, pixelRatio } = await renderCard();
   const baseName = getFileName();
 
   if (format === "png") {
@@ -96,13 +115,17 @@ async function exportResult(format: Format) {
     return;
   }
 
-  const pixelRatio = Math.min(3, Math.max(2, window.devicePixelRatio || 1));
   const widthPx = canvas.width / pixelRatio;
   const heightPx = canvas.height / pixelRatio;
   const widthMm = (widthPx / 96) * 25.4;
   const heightMm = (heightPx / 96) * 25.4;
 
-  if (!Number.isFinite(widthMm) || !Number.isFinite(heightMm) || widthMm <= 0 || heightMm <= 0) {
+  if (
+    !Number.isFinite(widthMm) ||
+    !Number.isFinite(heightMm) ||
+    widthMm <= 0 ||
+    heightMm <= 0
+  ) {
     throw new Error("The result card has an invalid size for PDF export.");
   }
 
@@ -115,7 +138,16 @@ async function exportResult(format: Format) {
   });
 
   const imageData = canvas.toDataURL("image/jpeg", 0.98);
-  pdf.addImage(imageData, "JPEG", 0, 0, widthMm, heightMm, undefined, "FAST");
+  pdf.addImage(
+    imageData,
+    "JPEG",
+    0,
+    0,
+    widthMm,
+    heightMm,
+    undefined,
+    "FAST",
+  );
   pdf.save(`${baseName}.pdf`);
 }
 
@@ -145,7 +177,10 @@ function formatMeta(format: Format) {
 
 function setDownloadButtonLabel(button: HTMLButtonElement) {
   for (const node of Array.from(button.childNodes)) {
-    if (node.nodeType === Node.TEXT_NODE && /download\s*\/\s*print/i.test(node.textContent || "")) {
+    if (
+      node.nodeType === Node.TEXT_NODE &&
+      /download\s*\/\s*print/i.test(node.textContent || "")
+    ) {
       node.textContent = "Download";
       return;
     }
@@ -161,10 +196,14 @@ export default function ResultDownload() {
 
   useEffect(() => {
     const findButton = () => {
-      const navigation = document.querySelector<HTMLElement>("[data-gradly-workflow-navigation]");
+      const navigation = document.querySelector<HTMLElement>(
+        "[data-gradly-workflow-navigation]",
+      );
       if (!navigation) return;
 
-      const buttons = Array.from(navigation.querySelectorAll<HTMLButtonElement>("button"));
+      const buttons = Array.from(
+        navigation.querySelectorAll<HTMLButtonElement>("button"),
+      );
       const button = buttons.find((candidate) =>
         /download\s*\/\s*print/i.test(candidate.textContent || ""),
       );
@@ -172,7 +211,10 @@ export default function ResultDownload() {
 
       setDownloadButtonLabel(button);
       button.setAttribute("aria-haspopup", "menu");
-      button.setAttribute("title", "Download result as PNG, JPG or PDF");
+      button.setAttribute(
+        "title",
+        "Download result as PNG, JPG or PDF",
+      );
 
       cleanupRef.current?.();
 
@@ -183,7 +225,10 @@ export default function ResultDownload() {
 
         const rect = button.getBoundingClientRect();
         setPosition({
-          top: Math.min(rect.bottom + 8, Math.max(12, window.innerHeight - 250)),
+          top: Math.min(
+            rect.bottom + 8,
+            Math.max(12, window.innerHeight - 250),
+          ),
           right: Math.max(12, window.innerWidth - rect.right),
         });
         setError("");
@@ -191,12 +236,17 @@ export default function ResultDownload() {
       };
 
       button.addEventListener("click", onClick, true);
-      cleanupRef.current = () => button.removeEventListener("click", onClick, true);
+      cleanupRef.current = () =>
+        button.removeEventListener("click", onClick, true);
     };
 
     findButton();
     const observer = new MutationObserver(findButton);
-    observer.observe(document.body, { childList: true, subtree: true, characterData: true });
+    observer.observe(document.body, {
+      childList: true,
+      subtree: true,
+      characterData: true,
+    });
 
     return () => {
       cleanupRef.current?.();
@@ -233,7 +283,11 @@ export default function ResultDownload() {
       await exportResult(format);
       setOpen(false);
     } catch (value) {
-      setError(value instanceof Error ? value.message : "Download failed. Please try again.");
+      setError(
+        value instanceof Error
+          ? value.message
+          : "Download failed. Please try again.",
+      );
     } finally {
       setBusy(null);
     }
