@@ -8,6 +8,7 @@ export default function OverlayZoom() {
   const [target, setTarget] = useState<HTMLElement | null>(null);
   const [portalHost, setPortalHost] = useState<HTMLElement | null>(null);
   const [zoom, setZoom] = useState(100);
+  const [position, setPosition] = useState({ x: 0, y: 0 });
 
   useEffect(() => {
     const find = () => {
@@ -23,7 +24,10 @@ export default function OverlayZoom() {
         setPortalHost(null);
       }
 
-      if (!next) setZoom(100);
+      if (!next) {
+        setZoom(100);
+        setPosition({ x: 0, y: 0 });
+      }
     };
 
     const observer = new MutationObserver(find);
@@ -40,20 +44,76 @@ export default function OverlayZoom() {
       if (!host) return;
       const base = Number(host.dataset.gradlyBaseScale || "1");
       host.dataset.gradlyBaseScale = String(base);
+      host.style.left = "50%";
+      host.style.top = "50%";
       host.style.transformOrigin = "center center";
-      host.style.transform = `scale(${base * zoom / 100})`;
+      host.style.transform = `translate(calc(-50% + ${position.x}px), calc(-50% + ${position.y}px)) scale(${base * zoom / 100})`;
     };
 
     applyTransform();
     const observer = new MutationObserver(applyTransform);
     observer.observe(target, { childList: true, subtree: true });
     return () => observer.disconnect();
-  }, [target, zoom]);
+  }, [target, zoom, position]);
+
+  useEffect(() => {
+    if (!target) return;
+
+    const surface = target;
+    let dragging = false;
+    let startX = 0;
+    let startY = 0;
+    let startPosition = { x: 0, y: 0 };
+
+    const onPointerDown = (event: PointerEvent) => {
+      const element = event.target as HTMLElement | null;
+      if (element?.closest("button, input, a, select, textarea")) return;
+      if (event.button !== 0) return;
+
+      dragging = true;
+      startX = event.clientX;
+      startY = event.clientY;
+      startPosition = position;
+      surface.setPointerCapture?.(event.pointerId);
+      surface.style.cursor = "grabbing";
+      event.preventDefault();
+    };
+
+    const onPointerMove = (event: PointerEvent) => {
+      if (!dragging) return;
+      setPosition({
+        x: startPosition.x + event.clientX - startX,
+        y: startPosition.y + event.clientY - startY,
+      });
+    };
+
+    const onPointerUp = (event: PointerEvent) => {
+      if (!dragging) return;
+      dragging = false;
+      surface.releasePointerCapture?.(event.pointerId);
+      surface.style.cursor = "grab";
+    };
+
+    surface.style.cursor = "grab";
+    surface.addEventListener("pointerdown", onPointerDown);
+    surface.addEventListener("pointermove", onPointerMove);
+    surface.addEventListener("pointerup", onPointerUp);
+    surface.addEventListener("pointercancel", onPointerUp);
+
+    return () => {
+      surface.style.cursor = "";
+      surface.removeEventListener("pointerdown", onPointerDown);
+      surface.removeEventListener("pointermove", onPointerMove);
+      surface.removeEventListener("pointerup", onPointerUp);
+      surface.removeEventListener("pointercancel", onPointerUp);
+    };
+  }, [target, position]);
 
   if (!portalHost) return null;
 
   const changeZoom = (amount: number) => setZoom((value) => Math.min(300, Math.max(50, value + amount)));
   const resetZoom = () => setZoom(100);
+  const resetPosition = () => setPosition({ x: 0, y: 0 });
 
   return createPortal(
     <div className="pointer-events-none absolute right-3 top-3 z-[100] flex items-center gap-1 rounded-xl border border-slate-200/90 bg-white/95 p-1 shadow-xl backdrop-blur">
