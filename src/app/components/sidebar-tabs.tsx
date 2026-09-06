@@ -5,6 +5,7 @@ import {
   Check,
   ChevronLeft,
   ChevronRight,
+  CircleCheck,
   ImagePlus,
   PenLine,
   Plus,
@@ -46,14 +47,34 @@ const defaultProfile: Profile = {
   removeWhite: false,
 };
 
-const tabs: Array<{
+const steps: Array<{
   id: TabId;
   label: string;
+  shortLabel: string;
+  description: string;
   icon: typeof BarChart3;
 }> = [
-  { id: "student", label: "Student details", icon: UserRound },
-  { id: "marks", label: "Marks", icon: BarChart3 },
-  { id: "remarks", label: "Principal & teacher", icon: PenLine },
+  {
+    id: "student",
+    label: "Student details",
+    shortLabel: "Student",
+    description: "Add the student and examination details.",
+    icon: UserRound,
+  },
+  {
+    id: "marks",
+    label: "Marks",
+    shortLabel: "Marks",
+    description: "Enter each subject and the obtained marks.",
+    icon: BarChart3,
+  },
+  {
+    id: "remarks",
+    label: "Review",
+    shortLabel: "Review",
+    description: "Add remarks and signatures, then finish.",
+    icon: PenLine,
+  },
 ];
 
 const panelGroups: Record<TabId, string[]> = {
@@ -84,8 +105,8 @@ function findPanel(sidebar: HTMLElement, names: string[]): HTMLElement | null {
       .filter(
         (node): node is HTMLElement =>
           node instanceof HTMLElement &&
-          !node.hasAttribute("data-gradly-sidebar-tabs-slot") &&
-          !node.hasAttribute("data-gradly-step-navigation"),
+          !node.hasAttribute("data-gradly-workflow-header") &&
+          !node.hasAttribute("data-gradly-workflow-navigation"),
       )
       .find((panel) => {
         const heading = panel.querySelector(".mb-4")?.textContent || "";
@@ -107,12 +128,20 @@ function completeStudent(sidebar: HTMLElement): boolean {
 }
 
 function completeMarks(sidebar: HTMLElement): boolean {
-  const panel = findPanel(sidebar, ["Subjects & marks", "Subject"]);
-  if (!panel) return false;
-
-  const rows = Array.from(
-    panel.querySelectorAll<HTMLTableRowElement>("tbody tr"),
+  const panels = Array.from(sidebar.children).filter(
+    (node): node is HTMLElement =>
+      node instanceof HTMLElement &&
+      !node.hasAttribute("data-gradly-workflow-header") &&
+      !node.hasAttribute("data-gradly-workflow-navigation"),
   );
+
+  const table = panels
+    .flatMap((panel) => Array.from(panel.querySelectorAll<HTMLTableElement>("table")))
+    .find((candidate) => /subject/i.test(candidate.textContent || "") && /obtained/i.test(candidate.textContent || ""));
+
+  if (!table) return false;
+
+  const rows = Array.from(table.querySelectorAll<HTMLTableRowElement>("tbody tr"));
   if (!rows.length) return false;
 
   return rows.every((row) => {
@@ -142,9 +171,7 @@ function completeRemarks(sidebar: HTMLElement): boolean {
   if (!panel) return false;
 
   const hasText = Array.from(
-    panel.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>(
-      "input, textarea",
-    ),
+    panel.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>("input, textarea"),
   ).some((input) => input.value.trim());
 
   const hasImage = Array.from(panel.querySelectorAll<HTMLImageElement>("img")).some(
@@ -196,9 +223,7 @@ function applyProfileToPage(profile: Profile) {
     }
   }
 
-  window.dispatchEvent(
-    new CustomEvent("gradly-school-profile", { detail: profile }),
-  );
+  window.dispatchEvent(new CustomEvent("gradly-school-profile", { detail: profile }));
 }
 
 function removeWhiteFromImage(dataUrl: string): Promise<string> {
@@ -297,12 +322,14 @@ export default function SidebarTabs() {
     remarks: false,
   });
   const [finished, setFinished] = useState(false);
-  const [sidebarMount, setSidebarMount] = useState<HTMLElement | null>(null);
+  const [headerMount, setHeaderMount] = useState<HTMLElement | null>(null);
+  const [navigationMount, setNavigationMount] = useState<HTMLElement | null>(null);
   const [topMount, setTopMount] = useState<HTMLElement | null>(null);
   const [schoolOpen, setSchoolOpen] = useState(false);
   const [profile, setProfile] = useState<Profile>(defaultProfile);
   const [draft, setDraft] = useState<Profile>(defaultProfile);
   const [saved, setSaved] = useState(false);
+  const [validationMessage, setValidationMessage] = useState("");
 
   const refresh = () => {
     const sidebar = getSidebar();
@@ -332,10 +359,15 @@ export default function SidebarTabs() {
 
     const sidebar = getSidebar();
     if (sidebar) {
-      const slot = document.createElement("div");
-      slot.setAttribute("data-gradly-sidebar-tabs-slot", "true");
-      sidebar.insertBefore(slot, sidebar.firstElementChild);
-      setSidebarMount(slot);
+      const headerSlot = document.createElement("div");
+      headerSlot.setAttribute("data-gradly-workflow-header", "true");
+      sidebar.insertBefore(headerSlot, sidebar.firstElementChild);
+      setHeaderMount(headerSlot);
+
+      const navigationSlot = document.createElement("div");
+      navigationSlot.setAttribute("data-gradly-workflow-navigation", "true");
+      sidebar.appendChild(navigationSlot);
+      setNavigationMount(navigationSlot);
     }
 
     const header = document.querySelector<HTMLElement>("header.no-print");
@@ -351,7 +383,8 @@ export default function SidebarTabs() {
     applyProfileToPage(stored);
 
     return () => {
-      document.querySelector("[data-gradly-sidebar-tabs-slot]")?.remove();
+      document.querySelector("[data-gradly-workflow-header]")?.remove();
+      document.querySelector("[data-gradly-workflow-navigation]")?.remove();
       document.querySelector("[data-gradly-school-topbar-slot]")?.remove();
     };
   }, []);
@@ -359,11 +392,15 @@ export default function SidebarTabs() {
   useEffect(() => {
     refresh();
 
-    const onChange = () => refresh();
+    const onChange = () => {
+      setValidationMessage("");
+      refresh();
+    };
+
     document.addEventListener("input", onChange, true);
     document.addEventListener("change", onChange, true);
 
-    const timer = window.setInterval(refresh, 300);
+    const timer = window.setInterval(refresh, 500);
     return () => {
       document.removeEventListener("input", onChange, true);
       document.removeEventListener("change", onChange, true);
@@ -372,24 +409,25 @@ export default function SidebarTabs() {
   }, []);
 
   useEffect(() => {
-    if (!sidebarMount) return;
+    if (!headerMount) return;
 
-    const sidebar = sidebarMount.parentElement;
+    const sidebar = headerMount.parentElement;
     if (!sidebar) return;
 
     const apply = () => {
       const panels = Array.from(sidebar.children).filter(
         (node): node is HTMLElement =>
           node instanceof HTMLElement &&
-          node !== sidebarMount &&
-          !node.hasAttribute("data-gradly-sidebar-tabs-slot") &&
-          !node.hasAttribute("data-gradly-step-navigation"),
+          node !== headerMount &&
+          node !== navigationMount &&
+          !node.hasAttribute("data-gradly-workflow-header") &&
+          !node.hasAttribute("data-gradly-workflow-navigation"),
       );
 
       panels.forEach((panel) => {
         const title =
           panel.querySelector(".mb-4")?.textContent?.trim() ||
-          panel.textContent?.slice(0, 100) ||
+          panel.textContent?.slice(0, 120) ||
           "";
 
         const visible =
@@ -406,7 +444,7 @@ export default function SidebarTabs() {
     const observer = new MutationObserver(apply);
     observer.observe(sidebar, { childList: true, subtree: true });
     return () => observer.disconnect();
-  }, [active, finished, sidebarMount]);
+  }, [active, finished, headerMount, navigationMount]);
 
   useEffect(() => {
     if (!schoolOpen) return;
@@ -431,16 +469,19 @@ export default function SidebarTabs() {
     }
   }, [draft, schoolOpen]);
 
+  useEffect(() => {
+    if (finished || validationMessage) return;
+    const id = window.requestAnimationFrame(() => refresh());
+    return () => window.cancelAnimationFrame(id);
+  }, [active, finished, validationMessage]);
+
   const chooseLogo = (file: File | undefined) => {
     if (!file) return;
 
     const reader = new FileReader();
     reader.onload = async () => {
       const raw = String(reader.result);
-      const logo = draft.removeWhite
-        ? await removeWhiteFromImage(raw)
-        : raw;
-
+      const logo = draft.removeWhite ? await removeWhiteFromImage(raw) : raw;
       setDraft((current) => ({ ...current, logo }));
     };
     reader.readAsDataURL(file);
@@ -462,20 +503,35 @@ export default function SidebarTabs() {
   const next = () => {
     const valid = isStepComplete(active);
     refresh();
-    if (!valid) return;
 
-    setCompleted((current) => ({ ...current, [active]: true }));
+    if (!valid) {
+      setValidationMessage(
+        active === "student"
+          ? "Complete the required student details to continue."
+          : active === "marks"
+            ? "Enter a valid subject and marks for every row to continue."
+            : "Add at least one remark or signature to complete the result.",
+      );
+      return;
+    }
+
+    setValidationMessage("");
 
     if (active === "student") {
+      setCompleted((current) => ({ ...current, student: true }));
       setActive("marks");
     } else if (active === "marks") {
+      setCompleted((current) => ({ ...current, marks: true }));
       setActive("remarks");
     } else {
+      setCompleted((current) => ({ ...current, remarks: true }));
       setFinished(true);
     }
   };
 
   const back = () => {
+    setValidationMessage("");
+
     if (finished) {
       setFinished(false);
       setActive("remarks");
@@ -495,12 +551,15 @@ export default function SidebarTabs() {
   };
 
   const activeIndex = useMemo(
-    () => tabs.findIndex((tab) => tab.id === active),
+    () => steps.findIndex((step) => step.id === active),
     [active],
   );
-  const canContinue = completed[active];
+  const currentStep = steps[activeIndex] || steps[0];
+  const percent = finished
+    ? 100
+    : Math.round(((activeIndex + (completed[currentStep.id] ? 1 : 0)) / steps.length) * 100);
 
-  if (!sidebarMount && !topMount) return null;
+  if (!headerMount && !navigationMount && !topMount) return null;
 
   const schoolButton = topMount
     ? createPortal(
@@ -520,161 +579,185 @@ export default function SidebarTabs() {
       )
     : null;
 
-  const sidebar = sidebarMount
+  const workflowHeader = headerMount
     ? createPortal(
-        <>
-          <div
-            data-gradly-sidebar-tabs
-            className="relative z-20 overflow-hidden rounded-2xl border border-[#d7d9dd] bg-[#111827] p-1.5 shadow-[0_8px_24px_rgba(15,23,42,0.12)]"
-          >
-            <div className="flex items-center justify-between px-2 pb-1.5 pt-1">
-              <div className="flex items-center gap-2">
-                <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
-                <span className="text-[9px] font-extrabold uppercase tracking-[0.2em] text-white/55">
-                  Result steps
+        <div
+          data-gradly-workflow
+          className="mb-3 rounded-2xl border border-slate-200/90 bg-white/95 p-3.5 shadow-[0_10px_30px_rgba(15,23,42,0.06)] backdrop-blur"
+        >
+          {finished ? (
+            <div className="flex items-start gap-3">
+              <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-emerald-50 text-emerald-600 ring-1 ring-emerald-100">
+                <CircleCheck size={19} />
+              </span>
+              <div className="min-w-0">
+                <div className="text-[9px] font-extrabold uppercase tracking-[0.16em] text-emerald-600">
+                  Result ready
+                </div>
+                <h2 className="mt-0.5 text-sm font-black text-slate-900">
+                  Your result card is complete
+                </h2>
+                <p className="mt-1 text-[10px] leading-4 text-slate-500">
+                  Review the live card, then print or create another result.
+                </p>
+              </div>
+            </div>
+          ) : (
+            <>
+              <div className="flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="text-[9px] font-extrabold uppercase tracking-[0.16em] text-slate-400">
+                      Create result
+                    </span>
+                    <span className="h-1 w-1 rounded-full bg-slate-300" />
+                    <span className="text-[9px] font-bold text-slate-400">
+                      Step {activeIndex + 1} of {steps.length}
+                    </span>
+                  </div>
+                  <h2 className="mt-1 text-sm font-black text-slate-900">{currentStep.label}</h2>
+                </div>
+                <span className="shrink-0 rounded-full bg-slate-100 px-2.5 py-1 text-[9px] font-bold text-slate-500">
+                  {percent}%
                 </span>
               </div>
-              <span className="text-[9px] font-bold text-white/35">
-                {finished ? "3 / 3" : `${activeIndex + 1} / 3`}
-              </span>
-            </div>
 
-            {!finished ? (
-              <div className="relative px-1 pb-1">
-                {tabs.map(({ id, label, icon: Icon }, index) => {
-                  const selected = active === id;
-                  const done = completed[id] || index < activeIndex;
-                  const locked = index > activeIndex;
+              <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-slate-100" aria-hidden="true">
+                <div
+                  className="h-full rounded-full bg-[#17365D] transition-[width] duration-300"
+                  style={{ width: `${Math.max(8, percent)}%` }}
+                />
+              </div>
+
+              <div className="mt-3 flex items-center gap-1.5" aria-label="Result creation progress">
+                {steps.map((step, index) => {
+                  const isCurrent = index === activeIndex;
+                  const isDone = index < activeIndex || completed[step.id];
 
                   return (
-                    <div key={id} className="relative">
-                      <button
-                        type="button"
-                        disabled={locked}
-                        onClick={() => !locked && setActive(id)}
-                        title={label}
-                        aria-label={label}
-                        className={`group relative flex w-full items-center gap-3 rounded-xl px-2.5 py-2.5 text-left transition-all duration-200 ${
-                          selected
-                            ? "bg-white text-[#17365D] shadow-md"
-                            : done
-                              ? "bg-emerald-400/10 text-emerald-200"
-                              : "text-white/55 hover:bg-white/10 hover:text-white"
-                        } ${locked ? "cursor-not-allowed opacity-45" : ""}`}
+                    <div key={step.id} className="flex min-w-0 flex-1 items-center gap-1.5">
+                      <span
+                        className={`grid h-6 w-6 shrink-0 place-items-center rounded-lg text-[9px] font-black transition ${
+                          isCurrent
+                            ? "bg-[#17365D] text-white shadow-sm"
+                            : isDone
+                              ? "bg-emerald-50 text-emerald-600 ring-1 ring-emerald-100"
+                              : "bg-slate-100 text-slate-400"
+                        }`}
                       >
+                        {isDone ? <Check size={12} strokeWidth={3} /> : index + 1}
+                      </span>
+                      <span
+                        className={`min-w-0 truncate text-[9px] font-extrabold ${
+                          isCurrent ? "text-slate-800" : isDone ? "text-emerald-600" : "text-slate-400"
+                        }`}
+                      >
+                        {step.shortLabel}
+                      </span>
+                      {index < steps.length - 1 && (
                         <span
-                          className={`relative z-10 grid h-8 w-8 shrink-0 place-items-center rounded-lg ${
-                            selected
-                              ? "bg-[#edf2f8]"
-                              : done
-                                ? "bg-emerald-400/15"
-                                : "bg-white/5"
-                          }`}
-                        >
-                          {done ? <Check size={15} /> : <Icon size={15} />}
-                        </span>
-                        <span className="min-w-0 flex-1">
-                          <span className="block text-[10px] font-extrabold uppercase tracking-[0.08em]">
-                            Step {index + 1}
-                          </span>
-                          <span
-                            className={`mt-0.5 block truncate text-[11px] font-bold ${
-                              selected ? "text-[#17365D]" : "text-white/80"
-                            }`}
-                          >
-                            {label}
-                          </span>
-                        </span>
-                        {selected && (
-                          <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-                        )}
-                      </button>
-                      {index < 2 && (
-                        <span
+                          className={`mx-0.5 h-px flex-1 ${index < activeIndex ? "bg-emerald-200" : "bg-slate-200"}`}
                           aria-hidden="true"
-                          className="absolute left-[18px] top-[44px] h-4 w-px bg-white/10"
                         />
                       )}
                     </div>
                   );
                 })}
               </div>
-            ) : (
-              <div className="px-2 pb-2 pt-1 text-[10px] font-bold text-emerald-300">
-                All steps completed — result ready
-              </div>
-            )}
-          </div>
 
-          <div
-            data-gradly-step-navigation
-            className="sticky bottom-3 z-20 mt-3 rounded-2xl border border-slate-200 bg-white/95 p-3 shadow-lg backdrop-blur"
-          >
-            {!finished ? (
-              <div className="flex items-center justify-between gap-2">
-                <button
-                  type="button"
-                  onClick={back}
-                  disabled={active === "student"}
-                  className="inline-flex items-center gap-1 rounded-xl border border-slate-200 bg-white px-3 py-2 text-[11px] font-extrabold text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
-                >
-                  <ChevronLeft size={14} />
-                  Back
-                </button>
-
-                <button
-                  type="button"
-                  onClick={next}
-                  disabled={!canContinue}
-                  className="inline-flex items-center gap-1 rounded-xl bg-[#17365D] px-4 py-2 text-[11px] font-extrabold text-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-md disabled:cursor-not-allowed disabled:opacity-40"
-                >
-                  {active === "remarks" ? "Finish result" : "Continue"}
-                  <ChevronRight size={14} />
-                </button>
+              <div className="mt-3 flex items-start gap-2 rounded-xl bg-slate-50 px-3 py-2.5">
+                <currentStep.icon size={14} className="mt-0.5 shrink-0 text-[#17365D]" />
+                <p className="text-[10px] leading-4 text-slate-500">{currentStep.description}</p>
               </div>
-            ) : (
-              <div className="grid gap-2">
+
+              {validationMessage && (
+                <div className="mt-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-[10px] font-semibold leading-4 text-amber-800">
+                  {validationMessage}
+                </div>
+              )}
+            </>
+          )}
+        </div>,
+        headerMount,
+      )
+    : null;
+
+  const workflowNavigation = navigationMount
+    ? createPortal(
+        <div
+          data-gradly-workflow-navigation
+          className="mt-3 rounded-2xl border border-slate-200 bg-white/95 p-3 shadow-[0_10px_26px_rgba(15,23,42,0.07)] backdrop-blur"
+        >
+          {!finished ? (
+            <div className="flex items-center justify-between gap-3">
+              <button
+                type="button"
+                onClick={back}
+                disabled={active === "student"}
+                className="inline-flex min-h-10 items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3.5 text-[11px] font-extrabold text-slate-600 transition hover:border-slate-300 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-35"
+              >
+                <ChevronLeft size={15} />
+                Back
+              </button>
+
+              <div className="min-w-0 flex-1 text-right">
+                <div className="truncate text-[9px] font-bold text-slate-400">
+                  {completed[active] ? "Section complete" : "Complete this section to continue"}
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={next}
+                className="inline-flex min-h-10 items-center gap-1.5 rounded-xl bg-[#17365D] px-4 text-[11px] font-extrabold text-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
+              >
+                {active === "remarks" ? "Complete result" : "Continue"}
+                <ChevronRight size={15} />
+              </button>
+            </div>
+          ) : (
+            <div className="grid gap-2">
+              <button
+                type="button"
+                onClick={print}
+                className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl bg-[#17365D] px-4 text-[11px] font-extrabold text-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
+              >
+                <Printer size={15} />
+                Download / Print
+              </button>
+              <div className="grid grid-cols-2 gap-2">
                 <button
                   type="button"
                   onClick={print}
-                  className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#17365D] px-4 py-2.5 text-[11px] font-extrabold text-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
+                  className="inline-flex min-h-9 items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 text-[10px] font-extrabold text-slate-700 transition hover:bg-slate-50"
                 >
-                  <Printer size={14} />
-                  Download / Print
+                  <Printer size={13} />
+                  Print result
                 </button>
-                <div className="grid grid-cols-2 gap-2">
-                  <button
-                    type="button"
-                    onClick={print}
-                    className="inline-flex items-center justify-center gap-1 rounded-xl border border-slate-200 bg-white px-3 py-2 text-[10px] font-extrabold text-slate-700 transition hover:bg-slate-50"
-                  >
-                    <Printer size={13} />
-                    Print result
-                  </button>
-                  <button
-                    type="button"
-                    onClick={newResult}
-                    className="inline-flex items-center justify-center gap-1 rounded-xl border border-slate-200 bg-white px-3 py-2 text-[10px] font-extrabold text-slate-700 transition hover:bg-slate-50"
-                  >
-                    <Plus size={13} />
-                    Add another
-                  </button>
-                </div>
                 <button
                   type="button"
-                  onClick={() => {
-                    setFinished(false);
-                    setActive("remarks");
-                  }}
-                  className="text-[10px] font-bold text-slate-400 transition hover:text-[#17365D]"
+                  onClick={newResult}
+                  className="inline-flex min-h-9 items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 text-[10px] font-extrabold text-slate-700 transition hover:bg-slate-50"
                 >
-                  Review step 3
+                  <Plus size={13} />
+                  Add another
                 </button>
               </div>
-            )}
-          </div>
-        </>,
-        sidebarMount,
+              <button
+                type="button"
+                onClick={() => {
+                  setFinished(false);
+                  setActive("remarks");
+                  setValidationMessage("");
+                }}
+                className="pt-1 text-[10px] font-bold text-slate-400 transition hover:text-[#17365D]"
+              >
+                Review result details
+              </button>
+            </div>
+          )}
+        </div>,
+        navigationMount,
       )
     : null;
 
@@ -829,7 +912,8 @@ export default function SidebarTabs() {
   return (
     <>
       {schoolButton}
-      {sidebar}
+      {workflowHeader}
+      {workflowNavigation}
       {schoolModal}
     </>
   );
