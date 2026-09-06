@@ -2,13 +2,23 @@
 
 import { Minus, Plus, RotateCcw } from "lucide-react";
 import { createPortal } from "react-dom";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 export default function OverlayZoom() {
   const [target, setTarget] = useState<HTMLElement | null>(null);
   const [portalHost, setPortalHost] = useState<HTMLElement | null>(null);
   const [zoom, setZoom] = useState(200);
   const [position, setPosition] = useState({ x: 0, y: 0 });
+  const positionRef = useRef(position);
+  const zoomRef = useRef(zoom);
+
+  useEffect(() => {
+    positionRef.current = position;
+  }, [position]);
+
+  useEffect(() => {
+    zoomRef.current = zoom;
+  }, [zoom]);
 
   useEffect(() => {
     const find = () => {
@@ -47,6 +57,7 @@ export default function OverlayZoom() {
       host.style.left = "50%";
       host.style.top = "50%";
       host.style.transformOrigin = "center center";
+      host.style.willChange = "transform";
       host.style.transform = `translate(calc(-50% + ${position.x}px), calc(-50% + ${position.y}px)) scale(${base * zoom / 100})`;
     };
 
@@ -64,6 +75,19 @@ export default function OverlayZoom() {
     let startX = 0;
     let startY = 0;
     let startPosition = { x: 0, y: 0 };
+    let frame = 0;
+    let pendingPosition = positionRef.current;
+
+    const renderPosition = () => {
+      frame = 0;
+      positionRef.current = pendingPosition;
+      setPosition(pendingPosition);
+    };
+
+    const schedulePosition = (next: { x: number; y: number }) => {
+      pendingPosition = next;
+      if (!frame) frame = requestAnimationFrame(renderPosition);
+    };
 
     const onPointerDown = (event: PointerEvent) => {
       const element = event.target as HTMLElement | null;
@@ -73,47 +97,66 @@ export default function OverlayZoom() {
       dragging = true;
       startX = event.clientX;
       startY = event.clientY;
-      startPosition = position;
+      startPosition = positionRef.current;
       surface.setPointerCapture?.(event.pointerId);
       surface.style.cursor = "grabbing";
+      surface.style.userSelect = "none";
       event.preventDefault();
     };
 
     const onPointerMove = (event: PointerEvent) => {
       if (!dragging) return;
-      setPosition({
-        x: startPosition.x + event.clientX - startX,
-        y: startPosition.y + event.clientY - startY,
+
+      const host = surface.querySelector<HTMLElement>("div > div");
+      const base = Number(host?.dataset.gradlyBaseScale || "1");
+      const visualScale = Math.max(0.01, base * zoomRef.current / 100);
+
+      // Position is stored in the card's own coordinate space. Divide the
+      // mouse movement by the visual scale so dragging stays 1:1 at 200–400%.
+      const dx = (event.clientX - startX) / visualScale;
+      const dy = (event.clientY - startY) / visualScale;
+
+      schedulePosition({
+        x: startPosition.x + dx,
+        y: startPosition.y + dy,
       });
     };
 
-    const onPointerUp = (event: PointerEvent) => {
+    const stopDragging = (event: PointerEvent) => {
       if (!dragging) return;
       dragging = false;
+      if (frame) cancelAnimationFrame(frame);
+      frame = 0;
+      positionRef.current = pendingPosition;
+      setPosition(pendingPosition);
       surface.releasePointerCapture?.(event.pointerId);
       surface.style.cursor = "grab";
+      surface.style.userSelect = "";
     };
 
     surface.style.cursor = "grab";
+    surface.style.touchAction = "none";
     surface.addEventListener("pointerdown", onPointerDown);
     surface.addEventListener("pointermove", onPointerMove);
-    surface.addEventListener("pointerup", onPointerUp);
-    surface.addEventListener("pointercancel", onPointerUp);
+    surface.addEventListener("pointerup", stopDragging);
+    surface.addEventListener("pointercancel", stopDragging);
 
     return () => {
+      if (frame) cancelAnimationFrame(frame);
       surface.style.cursor = "";
+      surface.style.userSelect = "";
+      surface.style.touchAction = "";
       surface.removeEventListener("pointerdown", onPointerDown);
       surface.removeEventListener("pointermove", onPointerMove);
-      surface.removeEventListener("pointerup", onPointerUp);
-      surface.removeEventListener("pointercancel", onPointerUp);
+      surface.removeEventListener("pointerup", stopDragging);
+      surface.removeEventListener("pointercancel", stopDragging);
     };
-  }, [target, position]);
+  }, [target]);
 
   if (!portalHost) return null;
 
   const changeZoom = (amount: number) => setZoom((value) => Math.min(400, Math.max(50, value + amount)));
   const resetZoom = () => setZoom(200);
-  const resetPosition = () => setPosition({ x: 0, y: 0 });
 
   return createPortal(
     <div className="pointer-events-none absolute right-3 top-3 z-[100] flex items-center gap-1 rounded-xl border border-slate-200/90 bg-white/95 p-1 shadow-xl backdrop-blur">
