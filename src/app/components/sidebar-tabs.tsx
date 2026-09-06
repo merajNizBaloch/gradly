@@ -99,21 +99,22 @@ function getSidebar(): HTMLElement | null {
   return document.querySelector<HTMLElement>("section.no-print.space-y-4");
 }
 
-function findPanel(sidebar: HTMLElement, names: string[]): HTMLElement | null {
-  return (
-    Array.from(sidebar.children)
-      .filter(
-        (node): node is HTMLElement =>
-          node instanceof HTMLElement &&
-          !node.hasAttribute("data-gradly-workflow-header") &&
-          !node.hasAttribute("data-gradly-workflow-navigation"),
-      )
-      .find((panel) => {
-        const heading = panel.querySelector(".mb-4")?.textContent || "";
-        const text = `${heading} ${panel.textContent || ""}`.toLowerCase();
-        return names.some((name) => text.includes(name.toLowerCase()));
-      }) || null
+function findPanels(sidebar: HTMLElement, names: string[]): HTMLElement[] {
+  return Array.from(sidebar.children).filter(
+    (node): node is HTMLElement => {
+      if (!(node instanceof HTMLElement)) return false;
+      if (node.hasAttribute("data-gradly-workflow-header")) return false;
+      if (node.hasAttribute("data-gradly-workflow-navigation")) return false;
+
+      const heading = node.querySelector(".mb-4")?.textContent || "";
+      const text = `${heading} ${node.textContent || ""}`.toLowerCase();
+      return names.some((name) => text.includes(name.toLowerCase()));
+    },
   );
+}
+
+function findPanel(sidebar: HTMLElement, names: string[]): HTMLElement | null {
+  return findPanels(sidebar, names)[0] || null;
 }
 
 function completeStudent(sidebar: HTMLElement): boolean {
@@ -128,16 +129,14 @@ function completeStudent(sidebar: HTMLElement): boolean {
 }
 
 function completeMarks(sidebar: HTMLElement): boolean {
-  const panels = Array.from(sidebar.children).filter(
-    (node): node is HTMLElement =>
-      node instanceof HTMLElement &&
-      !node.hasAttribute("data-gradly-workflow-header") &&
-      !node.hasAttribute("data-gradly-workflow-navigation"),
-  );
-
+  const panels = findPanels(sidebar, ["Subjects & marks", "Subject"]);
   const table = panels
     .flatMap((panel) => Array.from(panel.querySelectorAll<HTMLTableElement>("table")))
-    .find((candidate) => /subject/i.test(candidate.textContent || "") && /obtained/i.test(candidate.textContent || ""));
+    .find(
+      (candidate) =>
+        /subject/i.test(candidate.textContent || "") &&
+        /obtained/i.test(candidate.textContent || ""),
+    );
 
   if (!table) return false;
 
@@ -167,15 +166,19 @@ function completeMarks(sidebar: HTMLElement): boolean {
 }
 
 function completeRemarks(sidebar: HTMLElement): boolean {
-  const panel = findPanel(sidebar, ["Signatures", "Remarks"]);
-  if (!panel) return false;
+  const panels = findPanels(sidebar, ["Signatures", "Remarks"]);
+  if (!panels.length) return false;
 
-  const hasText = Array.from(
-    panel.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>("input, textarea"),
-  ).some((input) => input.value.trim());
+  const hasText = panels.some((panel) =>
+    Array.from(
+      panel.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>("input, textarea"),
+    ).some((input) => input.value.trim()),
+  );
 
-  const hasImage = Array.from(panel.querySelectorAll<HTMLImageElement>("img")).some(
-    (image) => !!image.src,
+  const hasImage = panels.some((panel) =>
+    Array.from(panel.querySelectorAll<HTMLImageElement>("img")).some(
+      (image) => !!image.src,
+    ),
   );
 
   return hasText || hasImage;
@@ -557,7 +560,9 @@ export default function SidebarTabs() {
   const currentStep = steps[activeIndex] || steps[0];
   const percent = finished
     ? 100
-    : Math.round(((activeIndex + (completed[currentStep.id] ? 1 : 0)) / steps.length) * 100);
+    : Math.round(
+        ((activeIndex + (completed[currentStep.id] ? 1 : 0)) / steps.length) * 100,
+      );
 
   if (!headerMount && !navigationMount && !topMount) return null;
 
@@ -649,14 +654,20 @@ export default function SidebarTabs() {
                       </span>
                       <span
                         className={`min-w-0 truncate text-[9px] font-extrabold ${
-                          isCurrent ? "text-slate-800" : isDone ? "text-emerald-600" : "text-slate-400"
+                          isCurrent
+                            ? "text-slate-800"
+                            : isDone
+                              ? "text-emerald-600"
+                              : "text-slate-400"
                         }`}
                       >
                         {step.shortLabel}
                       </span>
                       {index < steps.length - 1 && (
                         <span
-                          className={`mx-0.5 h-px flex-1 ${index < activeIndex ? "bg-emerald-200" : "bg-slate-200"}`}
+                          className={`mx-0.5 h-px flex-1 ${
+                            index < activeIndex ? "bg-emerald-200" : "bg-slate-200"
+                          }`}
                           aria-hidden="true"
                         />
                       )}
