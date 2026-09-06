@@ -140,6 +140,9 @@ function syncPreview(values: ReviewData) {
   const paper = document.querySelector<HTMLElement>(".gradly-paper");
   if (!paper) return;
 
+  paper.style.display = "flex";
+  paper.style.flexDirection = "column";
+
   const legacySection = Array.from(paper.querySelectorAll<HTMLElement>("div")).find((node) =>
     node.textContent?.includes("Principal's Remarks") &&
     !node.hasAttribute("data-gradly-remarks-preview") &&
@@ -184,9 +187,10 @@ function syncPreview(values: ReviewData) {
   if (!signatures) {
     signatures = document.createElement("div");
     signatures.setAttribute("data-gradly-signatures-preview", "true");
-    signatures.style.cssText = "margin-top:22px;display:grid;grid-template-columns:1fr 1fr;gap:40px;padding-top:18px;";
-    if (originalFooter?.parentElement) originalFooter.parentElement.appendChild(signatures);
-    else paper.appendChild(signatures);
+    signatures.style.cssText = "margin-top:auto;display:grid;grid-template-columns:1fr 1fr;gap:40px;padding-top:24px;padding-bottom:4px;width:100%;box-sizing:border-box;";
+    paper.appendChild(signatures);
+  } else {
+    signatures.style.marginTop = "auto";
   }
 
   const teacherHtml = values.teacherSignature
