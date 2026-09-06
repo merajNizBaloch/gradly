@@ -64,6 +64,88 @@ function canvasToBlob(canvas: HTMLCanvasElement, type: string, quality?: number)
   });
 }
 
+function concatBytes(...parts: Uint8Array[]) {
+  const total = parts.reduce((sum, part) => sum + part.length, 0);
+  const output = new Uint8Array(total);
+  let offset = 0;
+
+  for (const part of parts) {
+    output.set(part, offset);
+    offset += part.length;
+  }
+
+  return output;
+}
+
+function asciiBytes(value: string) {
+  return new TextEncoder().encode(value);
+}
+
+async function createPdfBlob(canvas: HTMLCanvasElement, pixelRatio: number) {
+  const jpegBlob = await canvasToBlob(canvas, "image/jpeg", 0.98);
+  const jpegBytes = new Uint8Array(await jpegBlob.arrayBuffer());
+
+  const cssWidthPx = canvas.width / pixelRatio;
+  const cssHeightPx = canvas.height / pixelRatio;
+  const pageWidthPt = (cssWidthPx / 96) * 72;
+  const pageHeightPt = (cssHeightPx / 96) * 72;
+
+  if (
+    !Number.isFinite(pageWidthPt) ||
+    !Number.isFinite(pageHeightPt) ||
+    pageWidthPt <= 0 ||
+    pageHeightPt <= 0
+  ) {
+    throw new Error("The result card has an invalid size for PDF export.");
+  }
+
+  const content = `q\n${pageWidthPt} 0 0 ${pageHeightPt} 0 0 cm\n/Im0 Do\nQ\n`;
+  const contentBytes = asciiBytes(content);
+
+  const header = asciiBytes("%PDF-1.4\n%âãÏÓ\n");
+  const objects = [
+    asciiBytes("1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n"),
+    asciiBytes("2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n"),
+    asciiBytes(
+      `3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${pageWidthPt} ${pageHeightPt}] /Resources << /XObject << /Im0 4 0 R >> >> /Contents 5 0 R >>\nendobj\n`,
+    ),
+    concatBytes(
+      asciiBytes(
+        `4 0 obj\n<< /Type /XObject /Subtype /Image /Width ${canvas.width} /Height ${canvas.height} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${jpegBytes.length} >>\nstream\n`,
+      ),
+      jpegBytes,
+      asciiBytes("\nendstream\nendobj\n"),
+    ),
+    concatBytes(
+      asciiBytes(`5 0 obj\n<< /Length ${contentBytes.length} >>\nstream\n`),
+      contentBytes,
+      asciiBytes("endstream\nendobj\n"),
+    ),
+  ];
+
+  const chunks: Uint8Array[] = [header];
+  const offsets: number[] = [0];
+  let cursor = header.length;
+
+  objects.forEach((object, index) => {
+    offsets[index + 1] = cursor;
+    chunks.push(object);
+    cursor += object.length;
+  });
+
+  const xrefOffset = cursor;
+  let xref = `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n`;
+  for (let index = 1; index <= objects.length; index += 1) {
+    xref += `${String(offsets[index]).padStart(10, "0")} 00000 n \n`;
+  }
+
+  const trailer = asciiBytes(
+    `${xref}trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xrefOffset}\n%%EOF\n`,
+  );
+
+  return new Blob([...chunks, trailer], { type: "application/pdf" });
+}
+
 async function renderCard() {
   const card = document.querySelector<HTMLElement>(".gradly-paper");
   if (!card) throw new Error("The result card is not ready for download.");
@@ -79,8 +161,10 @@ async function renderCard() {
       skipFonts: true,
       filter: (node) => {
         if (node instanceof HTMLElement) {
-          return !node.classList.contains("no-print") &&
-            !node.hasAttribute("data-gradly-download-menu");
+          return (
+            !node.classList.contains("no-print") &&
+            !node.hasAttribute("data-gradly-download-menu")
+          );
         }
         return true;
       },
@@ -92,10 +176,9 @@ async function renderCard() {
 
     return { canvas, pixelRatio };
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Unknown rendering error.";
-    throw new Error(
-      `Could not render the result card. ${message}`,
-    );
+    const message =
+      error instanceof Error ? error.message : "Unknown rendering error.";
+    throw new Error(`Could not render the result card. ${message}`);
   }
 }
 
@@ -115,40 +198,8 @@ async function exportResult(format: Format) {
     return;
   }
 
-  const widthPx = canvas.width / pixelRatio;
-  const heightPx = canvas.height / pixelRatio;
-  const widthMm = (widthPx / 96) * 25.4;
-  const heightMm = (heightPx / 96) * 25.4;
-
-  if (
-    !Number.isFinite(widthMm) ||
-    !Number.isFinite(heightMm) ||
-    widthMm <= 0 ||
-    heightMm <= 0
-  ) {
-    throw new Error("The result card has an invalid size for PDF export.");
-  }
-
-  const { jsPDF } = await import("jspdf");
-  const pdf = new jsPDF({
-    orientation: widthMm > heightMm ? "landscape" : "portrait",
-    unit: "mm",
-    format: [widthMm, heightMm],
-    compress: true,
-  });
-
-  const imageData = canvas.toDataURL("image/jpeg", 0.98);
-  pdf.addImage(
-    imageData,
-    "JPEG",
-    0,
-    0,
-    widthMm,
-    heightMm,
-    undefined,
-    "FAST",
-  );
-  pdf.save(`${baseName}.pdf`);
+  const pdfBlob = await createPdfBlob(canvas, pixelRatio);
+  downloadBlob(pdfBlob, `${baseName}.pdf`);
 }
 
 function formatMeta(format: Format) {
