@@ -2,15 +2,29 @@
 
 import { useEffect } from "react";
 
-const TEXT_FIELDS = ["school", "motto", "address", "contact"] as const;
+type DraftValues = { school: string; motto: string; address: string; contact: string };
 
-type DraftValues = Record<(typeof TEXT_FIELDS)[number], string>;
+function getDialog(): HTMLElement | null {
+  return document.querySelector<HTMLElement>("[role='dialog'][aria-labelledby='gradly-school-dialog-title']");
+}
 
-function readDraft(dialog: HTMLElement | null): DraftValues | null {
-  if (!dialog) return null;
-  const inputs = Array.from(dialog.querySelectorAll<HTMLInputElement>("input[type='text']"));
-  if (inputs.length < 4) return null;
-  return { school: inputs[0]?.value ?? "", motto: inputs[1]?.value ?? "", address: inputs[2]?.value ?? "", contact: inputs[3]?.value ?? "" };
+function getPreviewTarget(dialog: HTMLElement | null): HTMLElement | null {
+  return dialog?.querySelector<HTMLElement>("[data-gradly-preview-target]") ?? null;
+}
+
+function getDraft(dialog: HTMLElement): DraftValues {
+  const fields = {
+    school: dialog.querySelector<HTMLInputElement>("[data-gradly-school-field='school']"),
+    motto: dialog.querySelector<HTMLInputElement>("[data-gradly-school-field='motto']"),
+    address: dialog.querySelector<HTMLInputElement>("[data-gradly-school-field='address']"),
+    contact: dialog.querySelector<HTMLInputElement>("[data-gradly-school-field='contact']"),
+  };
+  return {
+    school: fields.school?.value ?? "",
+    motto: fields.motto?.value ?? "",
+    address: fields.address?.value ?? "",
+    contact: fields.contact?.value ?? "",
+  };
 }
 
 function replaceText(root: HTMLElement, from: string, to: string) {
@@ -22,23 +36,25 @@ function replaceText(root: HTMLElement, from: string, to: string) {
     if (node.nodeValue?.includes(from)) nodes.push(node as Text);
     node = walker.nextNode();
   }
-  nodes.forEach((text) => { text.nodeValue = text.nodeValue?.split(from).join(to) ?? text.nodeValue; });
+  for (const text of nodes) {
+    text.nodeValue = (text.nodeValue ?? "").split(from).join(to);
+  }
 }
 
-function buildPreview(source: HTMLElement, target: HTMLElement, values: DraftValues) {
-  const width = Math.max(1, source.offsetWidth || source.getBoundingClientRect().width);
-  const height = Math.max(1, source.offsetHeight || source.getBoundingClientRect().height);
-  if (!width || !height) return;
+function renderPreview(source: HTMLElement, target: HTMLElement, values: DraftValues): (() => void) | null {
+  const sourceRect = source.getBoundingClientRect();
+  const width = Math.max(1, sourceRect.width);
+  const height = Math.max(1, sourceRect.height);
+  if (width < 10 || height < 10) return null;
 
   const clone = source.cloneNode(true) as HTMLElement;
   clone.querySelectorAll("script,button,input,textarea,select,.no-print").forEach((node) => node.remove());
 
   const baseInputs = Array.from(document.querySelectorAll<HTMLInputElement>("section.no-print.space-y-4 input"));
-  const base = { school: baseInputs[0]?.value ?? "", motto: baseInputs[1]?.value ?? "", address: baseInputs[2]?.value ?? "", contact: baseInputs[3]?.value ?? "" };
-  replaceText(clone, base.school, values.school);
-  replaceText(clone, base.motto, values.motto);
-  replaceText(clone, base.address, values.address);
-  replaceText(clone, base.contact, values.contact);
+  replaceText(clone, baseInputs[0]?.value ?? "", values.school);
+  replaceText(clone, baseInputs[1]?.value ?? "", values.motto);
+  replaceText(clone, baseInputs[2]?.value ?? "", values.address);
+  replaceText(clone, baseInputs[3]?.value ?? "", values.contact);
 
   clone.style.width = `${width}px`;
   clone.style.height = `${height}px`;
@@ -46,55 +62,46 @@ function buildPreview(source: HTMLElement, target: HTMLElement, values: DraftVal
   clone.style.minHeight = `${height}px`;
   clone.style.maxWidth = "none";
   clone.style.maxHeight = "none";
-  clone.style.flex = "none";
   clone.style.margin = "0";
-  clone.style.boxShadow = "none";
+  clone.style.flex = "none";
   clone.style.transform = "none";
   clone.style.zoom = "1";
-  clone.style.aspectRatio = "auto";
+
+  target.innerHTML = "";
+  target.style.position = "relative";
+  target.style.overflow = "hidden";
+  target.style.minHeight = "330px";
 
   const frame = document.createElement("div");
   frame.style.position = "absolute";
-  frame.style.inset = "12px";
+  frame.style.left = "12px";
+  frame.style.top = "12px";
+  frame.style.right = "12px";
+  frame.style.bottom = "12px";
   frame.style.overflow = "hidden";
-  frame.style.display = "flex";
-  frame.style.alignItems = "flex-start";
-  frame.style.justifyContent = "center";
 
   const host = document.createElement("div");
-  host.style.position = "relative";
+  host.style.position = "absolute";
+  host.style.left = "0";
+  host.style.top = "0";
   host.style.width = `${width}px`;
   host.style.height = `${height}px`;
-  host.style.flex = "0 0 auto";
   host.style.transformOrigin = "top left";
   host.appendChild(clone);
   frame.appendChild(host);
-  target.replaceChildren(frame);
+  target.appendChild(frame);
 
   const fit = () => {
-    const availableWidth = Math.max(1, target.clientWidth - 24);
-    const availableHeight = Math.max(1, target.clientHeight - 24);
+    const availableWidth = Math.max(1, frame.clientWidth);
+    const availableHeight = Math.max(1, frame.clientHeight);
     const scale = Math.min(1, availableWidth / width, availableHeight / height);
     host.style.transform = `scale(${scale})`;
+    host.style.left = `${Math.max(0, (availableWidth - width * scale) / 2)}px`;
+    host.style.top = `${Math.max(0, (availableHeight - height * scale) / 2)}px`;
   };
 
   fit();
   return fit;
-}
-
-function findOverlayTarget(): { dialog: HTMLElement; target: HTMLElement } | null {
-  const dialog = document.querySelector<HTMLElement>("[role='dialog'][aria-labelledby='gradly-school-dialog-title']");
-  if (!dialog) return null;
-
-  const labels = Array.from(dialog.querySelectorAll("span"));
-  const label = labels.find((el) => el.textContent?.trim() === "Printed result preview");
-  const panel = label?.parentElement?.parentElement;
-
-  // New stable target, with a fallback for the current live preview markup.
-  const target = panel?.querySelector<HTMLElement>("[data-gradly-preview-target]")
-    ?? panel?.querySelector<HTMLElement>("div.mx-auto.h-full.w-full.overflow-hidden.rounded-md.bg-white.shadow-lg");
-
-  return target ? { dialog, target } : null;
 }
 
 function fitMainCard() {
@@ -105,13 +112,10 @@ function fitMainCard() {
   source.style.flex = "0 0 auto";
   source.style.flexShrink = "0";
   source.style.maxWidth = "none";
-  source.style.width = source.style.width || "210mm";
-  source.style.height = source.style.height || "297mm";
 
-  const rect = source.getBoundingClientRect();
-  const zoom = parseFloat(getComputedStyle(source).zoom || "1") || 1;
-  const width = Math.max(1, rect.width / zoom);
-  const height = Math.max(1, rect.height / zoom);
+  const width = source.offsetWidth;
+  const height = source.offsetHeight;
+  if (!width || !height) return;
 
   if (window.innerWidth <= 640) {
     const scale = Math.min(1, Math.max(0.05, (window.innerWidth - 24) / width));
@@ -131,57 +135,59 @@ function fitMainCard() {
 
 export default function ResultPreviewFix() {
   useEffect(() => {
-    let frame = 0;
-    let resizeObserver: ResizeObserver | null = null;
-    let lastValues = "";
+    let raf = 0;
+    let retryTimer = 0;
+    let lastSignature = "";
+    let fitPreview: (() => void) | null = null;
+    let observedTarget: HTMLElement | null = null;
 
     const refresh = () => {
-      cancelAnimationFrame(frame);
-      frame = requestAnimationFrame(() => {
+      cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(() => {
         fitMainCard();
-        const found = findOverlayTarget();
-        if (!found) return;
 
-        const values = readDraft(found.dialog);
+        const dialog = getDialog();
+        const target = getPreviewTarget(dialog);
         const source = document.querySelector<HTMLElement>(".gradly-paper");
-        if (!values || !source) return;
-        const signature = JSON.stringify(values);
-        if (signature !== lastValues || !found.target.hasAttribute("data-gradly-preview-ready")) {
-          lastValues = signature;
-          const fit = buildPreview(source, found.target, values);
-          resizeObserver?.disconnect();
-          if (fit) {
-            resizeObserver = new ResizeObserver(() => fit());
-            resizeObserver.observe(found.target);
-          }
-          found.target.setAttribute("data-gradly-preview-ready", "true");
+
+        if (!dialog || !target || !source) {
+          retryTimer = window.setTimeout(refresh, 120);
+          return;
         }
+
+        const values = getDraft(dialog);
+        const signature = JSON.stringify(values) + `|${source.offsetWidth}|${source.offsetHeight}|${target.clientWidth}|${target.clientHeight}`;
+        if (signature !== lastSignature || observedTarget !== target || target.children.length === 0) {
+          lastSignature = signature;
+          observedTarget = target;
+          fitPreview = renderPreview(source, target, values);
+        }
+        fitPreview?.();
       });
     };
 
-    const onDraftInput = (event: Event) => {
-      const input = event.target;
-      if (!(input instanceof HTMLInputElement) || input.type !== "text") return;
-      const dialog = input.closest("[role='dialog'][aria-labelledby='gradly-school-dialog-title']");
-      if (!dialog) return;
-      lastValues = "";
-      refresh();
+    const onInput = (event: Event) => {
+      const target = event.target;
+      if (target instanceof HTMLInputElement && target.closest("[role='dialog'][aria-labelledby='gradly-school-dialog-title']")) {
+        lastSignature = "";
+        refresh();
+      }
     };
 
-    const mutationObserver = new MutationObserver(() => refresh());
-    mutationObserver.observe(document.body, { childList: true, subtree: true });
-    document.addEventListener("input", onDraftInput, true);
-    document.addEventListener("change", onDraftInput, true);
+    const observer = new MutationObserver(() => refresh());
+    observer.observe(document.body, { childList: true, subtree: true });
+    document.addEventListener("input", onInput, true);
+    document.addEventListener("change", onInput, true);
     window.addEventListener("resize", refresh);
     window.visualViewport?.addEventListener("resize", refresh);
     refresh();
 
     return () => {
-      cancelAnimationFrame(frame);
-      resizeObserver?.disconnect();
-      mutationObserver.disconnect();
-      document.removeEventListener("input", onDraftInput, true);
-      document.removeEventListener("change", onDraftInput, true);
+      cancelAnimationFrame(raf);
+      window.clearTimeout(retryTimer);
+      observer.disconnect();
+      document.removeEventListener("input", onInput, true);
+      document.removeEventListener("change", onInput, true);
       window.removeEventListener("resize", refresh);
       window.visualViewport?.removeEventListener("resize", refresh);
     };
