@@ -1,6 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import type { ResultDraft } from "./types";
-import { calculateResult } from "./validation";
+import { calculateResult, calculateSubjectGrade } from "./validation";
 
 function getClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -39,7 +39,8 @@ export async function createGradlyResult(draft: ResultDraft) {
       percentage: calculated.percentage,
       overall_grade: calculated.overall_grade,
       result_status: calculated.result_status,
-      template: draft.template
+      template: draft.template,
+      grading_scale: calculated.grading_scale,
     })
     .select("id, report_id")
     .single();
@@ -47,17 +48,15 @@ export async function createGradlyResult(draft: ResultDraft) {
   if (error) throw error;
 
   const rows = draft.subjects.map((subject, index) => {
-    const total = Math.max(0, Number(subject.total) || 0);
-    const obtained = Math.max(0, Math.min(total, Number(subject.obtained) || 0));
-    const percentage = total ? (obtained / total) * 100 : 0;
+    const calculatedSubject = calculateSubjectGrade(subject, calculated.grading_scale);
     return {
       result_id: result.id,
       sort_order: index,
       subject_name: subject.name,
-      total_marks: total,
-      obtained_marks: obtained,
-      percentage,
-      grade: percentage >= 90 ? "A+" : percentage >= 80 ? "A" : percentage >= 70 ? "B+" : percentage >= 60 ? "B" : percentage >= 50 ? "C" : percentage >= 40 ? "D" : "F"
+      total_marks: calculatedSubject.total,
+      obtained_marks: calculatedSubject.obtained,
+      percentage: calculatedSubject.percentage,
+      grade: calculatedSubject.grade,
     };
   });
 
