@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import "./sidebar-unified.css";
 import SiteFooter from "./components/site-footer";
 import SidebarTabs from "./components/sidebar-tabs";
 import ResultPreviewFix from "./components/result-preview-fix";
