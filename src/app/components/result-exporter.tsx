@@ -5,7 +5,6 @@ import { Download, FileImage, FileText, X } from "lucide-react";
 
 const EXPORT_BUTTON_TEXT = "Download / Print";
 type ExportFormat = "pdf" | "jpg" | "png";
-
 type ExportSize = { width: number; height: number };
 type JsPdfConstructor = new (options: Record<string, unknown>) => any;
 
@@ -19,7 +18,14 @@ function triggerDownload(dataUrl: string, filename: string) {
 }
 
 function dataUrlFromCanvas(canvas: HTMLCanvasElement, type: "image/png" | "image/jpeg") {
-  return canvas.toDataURL(type, type === "image/jpeg" ? 0.95 : undefined);
+  try {
+    return canvas.toDataURL(type, type === "image/jpeg" ? 0.95 : undefined);
+  } catch (error) {
+    if (error instanceof DOMException && error.name === "SecurityError") {
+      throw new Error("The result contains a browser resource that cannot be exported. Please replace the saved image and try again.");
+    }
+    throw error;
+  }
 }
 
 function readScript(url: string) {
@@ -97,11 +103,30 @@ function absoluteUrl(value: string) {
   }
 }
 
+function isExternalHttpUrl(value: string) {
+  try {
+    const url = new URL(value, window.location.href);
+    return (url.protocol === "http:" || url.protocol === "https:") && url.origin !== window.location.origin;
+  } catch {
+    return false;
+  }
+}
+
+function proxyImageUrl(value: string) {
+  return `/api/export-image?url=${encodeURIComponent(value)}`;
+}
+
 async function imageUrlToDataUrl(url: string): Promise<string> {
   if (!url || url.startsWith("data:") || url.startsWith("blob:")) return url;
 
   const resolved = absoluteUrl(url);
-  const response = await fetch(resolved, { credentials: "same-origin", cache: "force-cache" });
+  const fetchUrl = isExternalHttpUrl(resolved) ? proxyImageUrl(resolved) : resolved;
+  const response = await fetch(fetchUrl, {
+    credentials: "same-origin",
+    cache: "force-cache",
+    headers: { Accept: "image/*" },
+  });
+
   if (!response.ok) throw new Error(`Unable to load image (${response.status}).`);
 
   const blob = await response.blob();
@@ -121,6 +146,11 @@ function extractBackgroundUrls(value: string) {
   return urls;
 }
 
+function replaceUrlLiteral(value: string, sourceUrl: string, dataUrl: string) {
+  const escaped = sourceUrl.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return value.replace(new RegExp(escaped, "g"), dataUrl);
+}
+
 async function inlineImages(root: HTMLElement) {
   const imageElements = Array.from(root.querySelectorAll<HTMLImageElement>("img"));
 
@@ -128,14 +158,12 @@ async function inlineImages(root: HTMLElement) {
     const source = image.getAttribute("src") || "";
     if (!source) return;
 
-    try {
-      const dataUrl = await imageUrlToDataUrl(source);
-      image.setAttribute("src", dataUrl);
-      image.removeAttribute("srcset");
-      image.setAttribute("crossorigin", "anonymous");
-    } catch {
-      throw new Error("A result image could not be prepared for export. Please replace the saved image and try again.");
-    }
+    const dataUrl = await imageUrlToDataUrl(source);
+    image.setAttribute("src", dataUrl);
+    image.removeAttribute("srcset");
+    image.removeAttribute("crossorigin");
+    image.removeAttribute("loading");
+    image.removeAttribute("decoding");
   }));
 
   const elements = [root, ...Array.from(root.querySelectorAll<HTMLElement>("*"))];
@@ -147,12 +175,8 @@ async function inlineImages(root: HTMLElement) {
     let rewritten = background;
 
     for (const sourceUrl of urls) {
-      try {
-        const dataUrl = await imageUrlToDataUrl(sourceUrl);
-        rewritten = rewritten.replace(sourceUrl, dataUrl);
-      } catch {
-        throw new Error("A result image could not be prepared for export. Please replace the saved image and try again.");
-      }
+      const dataUrl = await imageUrlToDataUrl(sourceUrl);
+      rewritten = replaceUrlLiteral(rewritten, sourceUrl, dataUrl);
     }
 
     element.style.backgroundImage = rewritten;
@@ -175,13 +199,21 @@ async function buildIsolatedClone(source: HTMLElement) {
   clone.style.position = "relative";
   clone.style.left = "0";
   clone.style.top = "0";
-
-  // Remove all classes so Tailwind stylesheets cannot introduce unsupported
-  // lab()/oklab() declarations during serialization.
   clone.removeAttribute("class");
+
   await inlineImages(clone);
 
   return { clone, size };
+}
+
+async function svgToDataUrl(svg: string) {
+  return await new Promise<string>((resolve, reject) => {
+    const blob = new Blob([svg], { type: "image/svg+xml;charset=utf-8" });
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result));
+    reader.onerror = () => reject(new Error("Unable to prepare result SVG for export."));
+    reader.readAsDataURL(blob);
+  });
 }
 
 async function renderToCanvas(source: HTMLElement): Promise<{ canvas: HTMLCanvasElement; size: ExportSize }> {
@@ -197,37 +229,43 @@ async function renderToCanvas(source: HTMLElement): Promise<{ canvas: HTMLCanvas
     `</svg>`,
   ].join("");
 
-  const blob = new Blob([svg], { type: "image/svg+xml;charset=utf-8" });
-  const objectUrl = URL.createObjectURL(blob);
+  // Use a data: SVG, not a blob: SVG. Browser security behavior historically
+  // tainted canvases when blob-backed SVGs contained foreignObject content.
+  const svgDataUrl = await svgToDataUrl(svg);
+  const image = new Image();
+  image.decoding = "async";
 
+  await new Promise<void>((resolve, reject) => {
+    image.onload = () => resolve();
+    image.onerror = () => reject(new Error("Unable to render the result card for export."));
+    image.src = svgDataUrl;
+  });
+
+  const scale = Math.min(3, Math.max(2, window.devicePixelRatio || 1));
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.max(1, Math.round(size.width * scale));
+  canvas.height = Math.max(1, Math.round(size.height * scale));
+
+  const context = canvas.getContext("2d");
+  if (!context) throw new Error("Export canvas is unavailable.");
+
+  context.setTransform(scale, 0, 0, scale, 0, 0);
+  context.fillStyle = "#ffffff";
+  context.fillRect(0, 0, size.width, size.height);
+  context.drawImage(image, 0, 0, size.width, size.height);
+
+  // Force the browser to perform its origin-clean check here, while we can
+  // still report a useful export-specific error instead of a raw toDataURL error.
   try {
-    const image = new Image();
-    image.decoding = "async";
-    image.crossOrigin = "anonymous";
-
-    await new Promise<void>((resolve, reject) => {
-      image.onload = () => resolve();
-      image.onerror = () => reject(new Error("Unable to render the result card for export."));
-      image.src = objectUrl;
-    });
-
-    const scale = Math.min(3, Math.max(2, window.devicePixelRatio || 1));
-    const canvas = document.createElement("canvas");
-    canvas.width = Math.max(1, Math.round(size.width * scale));
-    canvas.height = Math.max(1, Math.round(size.height * scale));
-
-    const context = canvas.getContext("2d");
-    if (!context) throw new Error("Export canvas is unavailable.");
-
-    context.setTransform(scale, 0, 0, scale, 0, 0);
-    context.fillStyle = "#ffffff";
-    context.fillRect(0, 0, size.width, size.height);
-    context.drawImage(image, 0, 0, size.width, size.height);
-
-    return { canvas, size };
-  } finally {
-    URL.revokeObjectURL(objectUrl);
+    context.getImageData(0, 0, 1, 1);
+  } catch (error) {
+    if (error instanceof DOMException && error.name === "SecurityError") {
+      throw new Error("The result still contains a cross-origin resource. Please replace the saved image and try again.");
+    }
+    throw error;
   }
+
+  return { canvas, size };
 }
 
 function pdfSizeFromPixels(size: ExportSize) {
