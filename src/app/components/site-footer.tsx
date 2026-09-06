@@ -22,23 +22,21 @@ export default function SiteFooter() {
   }, []);
 
   return (
-    <footer className="no-print fixed bottom-4 right-4 z-50 print:hidden">
+    <footer className="pointer-events-none fixed bottom-4 right-4 z-50 no-print print:hidden sm:bottom-5 sm:right-5">
       <a
         href="https://techcraftsolution.com"
         target="_blank"
         rel="noopener noreferrer"
-        className="flex items-center gap-2 rounded-full border border-gray-200 bg-white/95 px-3.5 py-2 shadow-lg backdrop-blur-sm transition-all hover:-translate-y-0.5 hover:shadow-xl"
         aria-label="Made with love by TechCraft"
+        className="pointer-events-auto group flex items-center gap-2 rounded-full border border-black/5 bg-white/90 px-3 py-2 shadow-lg shadow-black/10 backdrop-blur-md transition-all duration-300 hover:-translate-y-1 hover:shadow-xl"
       >
-        <span className="text-[11px] font-medium text-gray-500">Made with</span>
-        <Heart
-          size={15}
-          fill="currentColor"
-          strokeWidth={1.8}
+        <span
+          className="grid h-7 w-7 place-items-center rounded-full bg-gray-50 transition-transform duration-300 group-hover:scale-110"
           style={{ color: themeColor }}
-          aria-hidden="true"
-        />
-        <span className="text-[11px] font-extrabold tracking-wide text-gray-800">by TechCraft</span>
+        >
+          <Heart size={14} fill="currentColor" strokeWidth={1.8} />
+        </span>
+        <span className="pr-1 text-xs font-semibold text-gray-600">by TechCraft</span>
       </a>
     </footer>
   );
