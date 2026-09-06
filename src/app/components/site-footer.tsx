@@ -22,20 +22,37 @@ export default function SiteFooter() {
   }, []);
 
   return (
-    <footer className="no-print border-t border-[#d9d9d4] bg-[#fbfbf9] px-5 py-5 text-center print:hidden">
-      <p className="flex items-center justify-center gap-1.5 text-xs font-medium text-gray-500 sm:text-sm">
-        Made with
-        <Heart size={14} fill="currentColor" strokeWidth={1.8} style={{ color: themeColor }} aria-label="love" />
-        by
-        <a
-          href="https://techcraftsolution.com"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="font-bold text-gray-700 transition hover:underline"
-        >
-          TechCraft
-        </a>
-      </p>
+    <footer className="no-print border-t border-[#d9d9d4] bg-[#f8f8f6] px-5 py-7 text-center print:hidden">
+      <div className="mx-auto flex max-w-[1600px] flex-col items-center justify-center gap-3 sm:flex-row sm:gap-4">
+        <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[.18em] text-gray-400">
+          <span className="h-px w-8 bg-gray-300 sm:w-10" />
+          Gradly
+          <span className="h-px w-8 bg-gray-300 sm:w-10" />
+        </div>
+
+        <div className="flex items-center gap-2.5 rounded-full border border-gray-200 bg-white px-4 py-2 shadow-sm">
+          <span className="text-xs font-medium text-gray-500">Made with</span>
+          <span
+            className="grid h-7 w-7 place-items-center rounded-full bg-gray-50"
+            style={{ color: themeColor }}
+          >
+            <Heart size={14} fill="currentColor" strokeWidth={1.8} aria-label="love" />
+          </span>
+          <span className="text-xs font-medium text-gray-500">by</span>
+          <a
+            href="https://techcraftsolution.com"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-xs font-extrabold tracking-wide text-gray-800 transition hover:-translate-y-0.5 hover:underline"
+          >
+            TechCraft
+          </a>
+        </div>
+
+        <div className="text-[10px] font-medium text-gray-400 sm:ml-1">
+          Student Result Studio
+        </div>
+      </div>
     </footer>
   );
 }
