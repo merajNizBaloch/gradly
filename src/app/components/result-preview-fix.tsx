@@ -31,11 +31,15 @@ function findPreviewTarget(): HTMLElement | null {
 }
 
 function getCardSize(source: HTMLElement) {
+  // CSS zoom is deliberately reset before measuring so the card's dimensions
+  // always represent the real print document, never its mobile presentation.
+  const previousZoom = source.style.zoom;
+  source.style.zoom = "1";
   const rect = source.getBoundingClientRect();
-  return {
-    width: Math.max(1, source.offsetWidth || rect.width),
-    height: Math.max(1, source.offsetHeight || rect.height),
-  };
+  const width = Math.max(1, source.offsetWidth || rect.width);
+  const height = Math.max(1, source.offsetHeight || rect.height);
+  source.style.zoom = previousZoom;
+  return { width, height };
 }
 
 function fitMainCard(source: HTMLElement) {
@@ -48,29 +52,38 @@ function fitMainCard(source: HTMLElement) {
   source.style.flex = "0 0 auto";
   source.style.flexShrink = "0";
   source.style.maxWidth = "none";
+  source.style.maxHeight = "none";
+  source.style.transform = "none";
+  source.style.transformOrigin = "top center";
 
   if (!mobile) {
-    source.style.transform = "none";
-    shell.style.height = "auto";
-    shell.style.minHeight = "0";
-    shell.style.overflow = "auto";
+    source.style.zoom = "1";
     shell.style.display = "flex";
     shell.style.justifyContent = "center";
     shell.style.alignItems = "flex-start";
+    shell.style.width = "100%";
+    shell.style.height = "auto";
+    shell.style.minHeight = "0";
+    shell.style.overflow = "auto";
     return;
   }
 
+  // Keep the result card itself fixed at print dimensions. CSS zoom scales the
+  // complete document as one unit on small screens, instead of letting its
+  // internal rows/columns reflow like a responsive web card.
   const availableWidth = Math.max(1, window.innerWidth - 24);
   const factor = Math.min(1, availableWidth / width);
-  source.style.transformOrigin = "top center";
-  source.style.transform = `scale(${factor})`;
+  const scaledHeight = Math.ceil(height * factor);
+
+  source.style.zoom = String(factor);
   shell.style.display = "flex";
   shell.style.justifyContent = "center";
   shell.style.alignItems = "flex-start";
   shell.style.overflow = "hidden";
   shell.style.width = "100%";
-  shell.style.height = `${Math.ceil(height * factor) + 12}px`;
-  shell.style.minHeight = `${Math.ceil(height * factor) + 12}px`;
+  shell.style.height = `${scaledHeight + 12}px`;
+  shell.style.minHeight = `${scaledHeight + 12}px`;
+  shell.style.paddingBottom = "12px";
 }
 
 function buildPreview(source: HTMLElement, target: HTMLElement) {
@@ -81,9 +94,13 @@ function buildPreview(source: HTMLElement, target: HTMLElement) {
   clone.querySelectorAll("script,button,input,textarea,select,.no-print").forEach((node) => node.remove());
 
   const dialog = target.closest("[role='dialog']");
-  const fields = dialog ? Array.from(dialog.querySelectorAll<HTMLInputElement>("input[type='text']")) : [];
+  const fields = dialog
+    ? Array.from(dialog.querySelectorAll<HTMLInputElement>("input[type='text']"))
+    : [];
   const values = fields.slice(0, 4).map((input) => input.value);
-  const sourceFields = Array.from(document.querySelectorAll<HTMLInputElement>("section.no-print.space-y-4 input[type='text']"));
+  const sourceFields = Array.from(
+    document.querySelectorAll<HTMLInputElement>("section.no-print.space-y-4 input[type='text']"),
+  );
   const baseValues = sourceFields.slice(0, 4).map((input) => input.value);
   baseValues.forEach((base, index) => replaceText(clone, base, values[index] ?? base));
 
@@ -103,6 +120,7 @@ function buildPreview(source: HTMLElement, target: HTMLElement) {
   clone.style.margin = "0";
   clone.style.boxShadow = "none";
   clone.style.transform = "none";
+  clone.style.zoom = "1";
   clone.style.aspectRatio = "auto";
 
   const host = document.createElement("div");
@@ -112,7 +130,10 @@ function buildPreview(source: HTMLElement, target: HTMLElement) {
   host.style.minWidth = `${width}px`;
   host.style.minHeight = `${height}px`;
   host.style.flex = "0 0 auto";
-  host.style.transformOrigin = "top left";
+  host.style.position = "absolute";
+  host.style.left = "50%";
+  host.style.top = "50%";
+  host.style.transformOrigin = "center center";
   host.appendChild(clone);
 
   target.replaceChildren(host);
@@ -120,17 +141,14 @@ function buildPreview(source: HTMLElement, target: HTMLElement) {
   target.style.position = "relative";
   target.style.overflow = "hidden";
   target.style.display = "block";
-  target.style.padding = "12px";
+  target.style.padding = "0";
   target.style.boxSizing = "border-box";
 
   const scale = () => {
     const availableWidth = Math.max(1, target.clientWidth - 24);
     const availableHeight = Math.max(1, target.clientHeight - 24);
     const factor = Math.min(1, availableWidth / width, availableHeight / height);
-    host.style.transform = `scale(${factor})`;
-    host.style.transformOrigin = "top left";
-    host.style.marginLeft = `${Math.max(0, (availableWidth - width * factor) / 2)}px`;
-    host.style.marginTop = `${Math.max(0, (availableHeight - height * factor) / 2)}px`;
+    host.style.transform = `translate(-50%, -50%) scale(${factor})`;
   };
 
   requestAnimationFrame(scale);
@@ -146,6 +164,7 @@ export default function ResultPreviewFix() {
         flex: 0 0 auto !important;
         flex-shrink: 0 !important;
         max-width: none !important;
+        max-height: none !important;
       }
       .print-shell {
         min-width: 0 !important;
@@ -166,7 +185,9 @@ export default function ResultPreviewFix() {
 
       fitMainCard(source);
 
-      const dialog = document.querySelector<HTMLElement>("[role='dialog'][aria-labelledby='gradly-school-dialog-title']");
+      const dialog = document.querySelector<HTMLElement>(
+        "[role='dialog'][aria-labelledby='gradly-school-dialog-title']",
+      );
       const target = findPreviewTarget();
       if (!dialog || !target) {
         lastModalState = false;
@@ -189,7 +210,10 @@ export default function ResultPreviewFix() {
       cancelAnimationFrame(frame);
       frame = requestAnimationFrame(refresh);
     });
-    observer.observe(document.body, { childList: true, subtree: true, characterData: true, attributes: true });
+    // Do not observe attributes: fitMainCard intentionally changes inline
+    // styles, and observing them would create a refresh loop.
+    observer.observe(document.body, { childList: true, subtree: true, characterData: true });
+
     const interval = window.setInterval(refresh, 350);
     const onResize = () => refresh();
     window.addEventListener("resize", onResize);
