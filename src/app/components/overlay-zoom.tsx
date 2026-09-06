@@ -8,13 +8,9 @@ export default function OverlayZoom() {
   const [target, setTarget] = useState<HTMLElement | null>(null);
   const [portalHost, setPortalHost] = useState<HTMLElement | null>(null);
   const [zoom, setZoom] = useState(200);
-  const [position, setPosition] = useState({ x: 0, y: 0 });
-  const positionRef = useRef(position);
-  const zoomRef = useRef(zoom);
-
-  useEffect(() => {
-    positionRef.current = position;
-  }, [position]);
+  const positionRef = useRef({ x: 0, y: 0 });
+  const zoomRef = useRef(200);
+  const [renderTick, setRenderTick] = useState(0);
 
   useEffect(() => {
     zoomRef.current = zoom;
@@ -36,7 +32,9 @@ export default function OverlayZoom() {
 
       if (!next) {
         setZoom(200);
-        setPosition({ x: 0, y: 0 });
+        zoomRef.current = 200;
+        positionRef.current = { x: 0, y: 0 };
+        setRenderTick((value) => value + 1);
       }
     };
 
@@ -52,26 +50,28 @@ export default function OverlayZoom() {
     const applyTransform = () => {
       const host = target.querySelector<HTMLElement>("div > div");
       if (!host) return;
+
       const base = Number(host.dataset.gradlyBaseScale || "1");
       host.dataset.gradlyBaseScale = String(base);
       host.style.left = "50%";
       host.style.top = "50%";
       host.style.transformOrigin = "center center";
       host.style.willChange = "transform";
-      host.style.transform = `translate(calc(-50% + ${position.x}px), calc(-50% + ${position.y}px)) scale(${base * zoom / 100})`;
+      host.style.transform = `translate(calc(-50% + ${positionRef.current.x}px), calc(-50% + ${positionRef.current.y}px)) scale(${base * zoom / 100})`;
     };
 
     applyTransform();
     const observer = new MutationObserver(applyTransform);
     observer.observe(target, { childList: true, subtree: true });
     return () => observer.disconnect();
-  }, [target, zoom, position]);
+  }, [target, zoom, renderTick]);
 
   useEffect(() => {
     if (!target) return;
 
     const surface = target;
     let dragging = false;
+    let pointerId = -1;
     let startX = 0;
     let startY = 0;
     let startPosition = { x: 0, y: 0 };
@@ -80,56 +80,54 @@ export default function OverlayZoom() {
 
     const renderPosition = () => {
       frame = 0;
+      if (!dragging) return;
       positionRef.current = pendingPosition;
-      setPosition(pendingPosition);
-    };
-
-    const schedulePosition = (next: { x: number; y: number }) => {
-      pendingPosition = next;
-      if (!frame) frame = requestAnimationFrame(renderPosition);
+      setRenderTick((value) => value + 1);
     };
 
     const onPointerDown = (event: PointerEvent) => {
       const element = event.target as HTMLElement | null;
       if (element?.closest("button, input, a, select, textarea")) return;
-      if (event.button !== 0) return;
+      if (event.button !== 0 || dragging) return;
 
       dragging = true;
+      pointerId = event.pointerId;
       startX = event.clientX;
       startY = event.clientY;
-      startPosition = positionRef.current;
-      surface.setPointerCapture?.(event.pointerId);
+      startPosition = { ...positionRef.current };
+      pendingPosition = startPosition;
+      surface.setPointerCapture?.(pointerId);
       surface.style.cursor = "grabbing";
       surface.style.userSelect = "none";
       event.preventDefault();
     };
 
     const onPointerMove = (event: PointerEvent) => {
-      if (!dragging) return;
+      if (!dragging || event.pointerId !== pointerId) return;
 
+      // Keep the drag visually 1:1 with the mouse at every zoom level.
+      // The stored position is in the card's unscaled coordinate system.
       const host = surface.querySelector<HTMLElement>("div > div");
       const base = Number(host?.dataset.gradlyBaseScale || "1");
-      const visualScale = Math.max(0.01, base * zoomRef.current / 100);
+      const scale = Math.max(0.01, base * zoomRef.current / 100);
+      pendingPosition = {
+        x: startPosition.x + (event.clientX - startX) / scale,
+        y: startPosition.y + (event.clientY - startY) / scale,
+      };
 
-      // Position is stored in the card's own coordinate space. Divide the
-      // mouse movement by the visual scale so dragging stays 1:1 at 200–400%.
-      const dx = (event.clientX - startX) / visualScale;
-      const dy = (event.clientY - startY) / visualScale;
-
-      schedulePosition({
-        x: startPosition.x + dx,
-        y: startPosition.y + dy,
-      });
+      if (!frame) frame = requestAnimationFrame(renderPosition);
+      event.preventDefault();
     };
 
     const stopDragging = (event: PointerEvent) => {
-      if (!dragging) return;
+      if (!dragging || event.pointerId !== pointerId) return;
       dragging = false;
       if (frame) cancelAnimationFrame(frame);
       frame = 0;
       positionRef.current = pendingPosition;
-      setPosition(pendingPosition);
-      surface.releasePointerCapture?.(event.pointerId);
+      setRenderTick((value) => value + 1);
+      surface.releasePointerCapture?.(pointerId);
+      pointerId = -1;
       surface.style.cursor = "grab";
       surface.style.userSelect = "";
     };
@@ -137,7 +135,7 @@ export default function OverlayZoom() {
     surface.style.cursor = "grab";
     surface.style.touchAction = "none";
     surface.addEventListener("pointerdown", onPointerDown);
-    surface.addEventListener("pointermove", onPointerMove);
+    surface.addEventListener("pointermove", onPointerMove, { passive: false });
     surface.addEventListener("pointerup", stopDragging);
     surface.addEventListener("pointercancel", stopDragging);
 
