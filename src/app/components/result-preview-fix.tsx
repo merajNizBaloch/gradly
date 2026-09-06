@@ -51,7 +51,6 @@ function preparePreviewLayout(target: HTMLElement) {
 
   previewRoot.style.width = "100%";
   previewRoot.style.minWidth = "0";
-  previewRoot.style.minHeight = mobile ? "0" : "0";
   previewRoot.style.height = mobile ? "58vh" : "100%";
   previewRoot.style.maxHeight = mobile ? "58vh" : "100%";
   previewRoot.style.display = "flex";
@@ -100,11 +99,7 @@ function buildFixedPreview(source: HTMLElement, target: HTMLElement) {
 
   const editorLogo = dialog?.querySelector<HTMLImageElement>("img[alt='School logo editor']");
   const cloneLogo = clone.querySelector<HTMLImageElement>("img[alt='School logo']");
-  if (editorLogo && cloneLogo) {
-    cloneLogo.src = editorLogo.src;
-    const zoomInput = dialog?.querySelector<HTMLInputElement>("input[type='range']");
-    void zoomInput;
-  }
+  if (editorLogo && cloneLogo) cloneLogo.src = editorLogo.src;
 
   clone.dataset.gradlyFixedPreviewCard = "true";
   clone.style.width = `${width}px`;
@@ -199,7 +194,7 @@ export default function ResultPreviewFix() {
     let targetObserver: MutationObserver | null = null;
     let lastSourceSize = "";
 
-    const refresh = () => {
+    const refresh = (forcePreviewRebuild = false) => {
       const source = document.querySelector<HTMLElement>(".gradly-paper");
       if (!source) return;
       fitMainCard(source);
@@ -218,7 +213,7 @@ export default function ResultPreviewFix() {
       const size = `${width}x${height}`;
       const owned = Boolean(target.querySelector("[data-gradly-fixed-preview-card]"));
 
-      if (!owned || size !== lastSourceSize) {
+      if (forcePreviewRebuild || !owned || size !== lastSourceSize) {
         const scale = buildFixedPreview(source, target);
         if (scale) {
           const resizeObserver = new ResizeObserver(scale);
@@ -232,7 +227,7 @@ export default function ResultPreviewFix() {
         targetObserver = new MutationObserver(() => {
           if (!target.querySelector("[data-gradly-fixed-preview-card]")) {
             cancelAnimationFrame(frame);
-            frame = requestAnimationFrame(refresh);
+            frame = requestAnimationFrame(() => refresh());
           }
         });
         targetObserver.observe(target, { childList: true, subtree: true });
@@ -241,9 +236,22 @@ export default function ResultPreviewFix() {
 
     const observer = new MutationObserver(() => {
       cancelAnimationFrame(frame);
-      frame = requestAnimationFrame(refresh);
+      frame = requestAnimationFrame(() => refresh());
     });
     observer.observe(document.body, { childList: true, subtree: true, characterData: true });
+
+    const onDraftInput = (event: Event) => {
+      const target = event.target;
+      if (!(target instanceof HTMLInputElement)) return;
+      const dialog = target.closest("[role='dialog'][aria-labelledby='gradly-school-dialog-title']");
+      if (!dialog || target.type !== "text") return;
+      lastSourceSize = "";
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => refresh(true));
+    };
+
+    document.addEventListener("input", onDraftInput, true);
+    document.addEventListener("change", onDraftInput, true);
 
     const interval = window.setInterval(refresh, 300);
     const onResize = () => refresh();
@@ -256,6 +264,8 @@ export default function ResultPreviewFix() {
       targetObserver?.disconnect();
       window.clearInterval(interval);
       cancelAnimationFrame(frame);
+      document.removeEventListener("input", onDraftInput, true);
+      document.removeEventListener("change", onDraftInput, true);
       window.removeEventListener("resize", onResize);
       window.visualViewport?.removeEventListener("resize", onResize);
       style.remove();
