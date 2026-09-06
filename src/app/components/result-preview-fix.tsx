@@ -17,17 +17,69 @@ function replaceText(root: HTMLElement, from: string, to: string) {
 }
 
 function findPreviewTarget(): HTMLElement | null {
-  const labels = Array.from(document.querySelectorAll<HTMLElement>("span"));
-  const label = labels.find((item) => item.textContent?.trim() === "Printed result preview");
+  const label = Array.from(document.querySelectorAll<HTMLElement>("span")).find(
+    (item) => item.textContent?.trim() === "Printed result preview",
+  );
   if (!label) return null;
+
   const panel = label.closest("div.flex.min-h-0.flex-col");
-  return panel?.querySelector<HTMLElement>("[data-gradly-fixed-preview]") ?? null;
+  if (!panel) return null;
+
+  return (
+    panel.querySelector<HTMLElement>("[data-gradly-fixed-preview]") ??
+    panel.querySelector<HTMLElement>("div.mx-auto.h-full.w-full.overflow-hidden")
+  );
+}
+
+function getCardSize(source: HTMLElement) {
+  return {
+    width: Math.max(1, source.offsetWidth),
+    height: Math.max(1, source.offsetHeight),
+  };
+}
+
+function fitMainCard(source: HTMLElement) {
+  const shell = source.closest<HTMLElement>(".print-shell");
+  if (!shell) return;
+
+  const { width, height } = getCardSize(source);
+  const mobile = window.matchMedia("(max-width: 640px)").matches;
+
+  source.style.flex = "0 0 auto";
+  source.style.flexShrink = "0";
+  source.style.maxWidth = "none";
+
+  if (!mobile) {
+    source.style.transform = "none";
+    source.style.transformOrigin = "top center";
+    shell.style.height = "auto";
+    shell.style.minHeight = "0";
+    shell.style.overflow = "auto";
+    shell.style.display = "flex";
+    shell.style.justifyContent = "center";
+    shell.style.alignItems = "flex-start";
+    return;
+  }
+
+  // Keep the document at its real print dimensions, but visually scale the
+  // complete card on small screens so it fits the viewport without reflowing
+  // its typography, columns, or spacing.
+  const availableWidth = Math.max(1, window.innerWidth - 24);
+  const factor = Math.min(1, availableWidth / width);
+
+  source.style.transformOrigin = "top center";
+  source.style.transform = `scale(${factor})`;
+  shell.style.display = "flex";
+  shell.style.justifyContent = "center";
+  shell.style.alignItems = "flex-start";
+  shell.style.overflow = "hidden";
+  shell.style.width = "100%";
+  shell.style.height = `${Math.ceil(height * factor) + 12}px`;
+  shell.style.minHeight = `${Math.ceil(height * factor) + 12}px`;
 }
 
 function buildPreview(source: HTMLElement, target: HTMLElement) {
-  const rect = source.getBoundingClientRect();
-  const width = Math.max(1, rect.width || source.offsetWidth);
-  const height = Math.max(1, rect.height || source.offsetHeight);
+  const { width, height } = getCardSize(source);
   if (width < 20 || height < 20) return false;
 
   const clone = source.cloneNode(true) as HTMLElement;
@@ -58,6 +110,7 @@ function buildPreview(source: HTMLElement, target: HTMLElement) {
   clone.style.aspectRatio = "auto";
 
   const host = document.createElement("div");
+  host.dataset.gradlyFixedPreviewCard = "true";
   host.style.width = `${width}px`;
   host.style.height = `${height}px`;
   host.style.flex = "0 0 auto";
@@ -65,8 +118,9 @@ function buildPreview(source: HTMLElement, target: HTMLElement) {
   host.appendChild(clone);
 
   target.replaceChildren(host);
+  target.dataset.gradlyFixedPreview = "true";
   target.style.position = "relative";
-  target.style.overflow = "auto";
+  target.style.overflow = "hidden";
   target.style.display = "flex";
   target.style.alignItems = "flex-start";
   target.style.justifyContent = "center";
@@ -78,7 +132,6 @@ function buildPreview(source: HTMLElement, target: HTMLElement) {
     const availableHeight = Math.max(1, target.clientHeight - 24);
     const factor = Math.min(1, availableWidth / width, availableHeight / height);
     host.style.transform = `scale(${factor})`;
-    host.style.marginBottom = `${Math.max(0, height * factor - height)}px`;
   };
   scale();
   return true;
@@ -96,7 +149,18 @@ export default function ResultPreviewFix() {
       }
       .print-shell {
         min-width: 0 !important;
-        overflow: auto !important;
+      }
+      @media print {
+        .gradly-paper {
+          transform: none !important;
+        }
+        .print-shell {
+          display: block !important;
+          width: auto !important;
+          height: auto !important;
+          min-height: 0 !important;
+          overflow: visible !important;
+        }
       }
     `;
     document.head.appendChild(style);
@@ -108,14 +172,20 @@ export default function ResultPreviewFix() {
     const refresh = () => {
       const source = document.querySelector<HTMLElement>(".gradly-paper");
       if (!source) return;
+
+      fitMainCard(source);
+
       const dialog = document.querySelector<HTMLElement>("[role='dialog'][aria-labelledby='gradly-school-dialog-title']");
       const target = findPreviewTarget();
-      const rect = source.getBoundingClientRect();
-      const size = `${Math.round(rect.width)}x${Math.round(rect.height)}`;
+      const { width, height } = getCardSize(source);
+      const size = `${width}x${height}`;
       const modalState = Boolean(dialog && target);
-      if (modalState && (size !== lastSourceSize || !lastModalState || target?.childElementCount === 0)) {
+      const hasFixedPreview = Boolean(target?.querySelector("[data-gradly-fixed-preview-card]"));
+
+      if (modalState && (!hasFixedPreview || size !== lastSourceSize || !lastModalState)) {
         buildPreview(source, target!);
       }
+
       lastSourceSize = size;
       lastModalState = modalState;
     };
