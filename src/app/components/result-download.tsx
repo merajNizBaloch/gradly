@@ -1,35 +1,21 @@
 "use client";
 
 import { Download, FileImage, FileText } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { useEffect, useRef, useState } from "react";
 
 type Format = "png" | "jpg" | "pdf";
-
-type Position = {
-  top: number;
-  right: number;
-};
+type Position = { top: number; right: number };
 
 function sanitizeFileName(value: string) {
-  return (
-    value
-      .trim()
-      .replace(/[^a-z0-9]+/gi, "-")
-      .replace(/^-+|-+$/g, "")
-      .toLowerCase() || "result"
-  );
+  return value.trim().replace(/[^a-z0-9]+/gi, "-").replace(/^-+|-+$/g, "").toLowerCase() || "result";
 }
 
 function getFileName() {
   const card = document.querySelector<HTMLElement>(".gradly-paper");
   const text = card?.textContent?.replace(/\s+/g, " ").trim() || "";
-  const match = text.match(
-    /Student\s+([^·|]+?)(?:\s+Father|\s+Roll\s+Number|\s+Class\s*&\s*Section)/i,
-  );
-  const studentName = match?.[1]?.trim();
-
-  return `gradly-${sanitizeFileName(studentName || "student-result")}`;
+  const match = text.match(/Student\s+([^·|]+?)(?:\s+Father|\s+Roll\s+Number|\s+Class\s*&\s*Section)/i);
+  return `gradly-${sanitizeFileName(match?.[1]?.trim() || "student-result")}`;
 }
 
 function downloadBlob(blob: Blob, fileName: string) {
@@ -43,37 +29,16 @@ function downloadBlob(blob: Blob, fileName: string) {
   window.setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
-function canvasToBlob(
-  canvas: HTMLCanvasElement,
-  type: "image/png" | "image/jpeg",
-  quality?: number,
-) {
+function canvasToBlob(canvas: HTMLCanvasElement, type: "image/png" | "image/jpeg", quality?: number) {
   return new Promise<Blob>((resolve, reject) => {
     try {
-      canvas.toBlob(
-        (blob) => {
-          if (blob) {
-            resolve(blob);
-            return;
-          }
-          reject(
-            new Error(
-              type === "image/jpeg"
-                ? "Could not create JPG image."
-                : "Could not create PNG image.",
-            ),
-          );
-        },
-        type,
-        quality,
-      );
+      canvas.toBlob((blob) => {
+        if (blob) return resolve(blob);
+        reject(new Error(type === "image/jpeg" ? "Could not create JPG image." : "Could not create PNG image."));
+      }, type, quality);
     } catch (error) {
       if (error instanceof DOMException && error.name === "SecurityError") {
-        reject(
-          new Error(
-            "The result contains an external image that the browser blocked from export.",
-          ),
-        );
+        reject(new Error("The browser blocked an image during export. Please try again; Gradly now routes saved images through its export proxy."));
         return;
       }
       reject(error);
@@ -81,89 +46,21 @@ function canvasToBlob(
   });
 }
 
+const STYLE_PROPS = [
+  "box-sizing","display","position","top","right","bottom","left","width","height","min-width","min-height","max-width","max-height","margin","padding","border","border-top","border-right","border-bottom","border-left","border-radius","background","background-color","background-image","background-size","background-position","background-repeat","color","font","font-family","font-size","font-weight","font-style","line-height","letter-spacing","text-align","text-decoration","text-transform","text-indent","white-space","vertical-align","overflow","overflow-wrap","word-break","box-shadow","opacity","transform","transform-origin","flex","flex-direction","flex-wrap","flex-grow","flex-shrink","flex-basis","align-items","align-content","align-self","justify-content","gap","grid-template-columns","grid-template-rows","grid-column","grid-row","object-fit","object-position",
+];
+
 function copyComputedStyles(source: Element, target: Element) {
   const computed = window.getComputedStyle(source);
-  const properties = [
-    "box-sizing",
-    "display",
-    "position",
-    "top",
-    "right",
-    "bottom",
-    "left",
-    "width",
-    "height",
-    "min-width",
-    "min-height",
-    "max-width",
-    "max-height",
-    "margin",
-    "padding",
-    "border",
-    "border-top",
-    "border-right",
-    "border-bottom",
-    "border-left",
-    "border-radius",
-    "background",
-    "background-color",
-    "background-image",
-    "background-size",
-    "background-position",
-    "background-repeat",
-    "color",
-    "font",
-    "font-family",
-    "font-size",
-    "font-weight",
-    "font-style",
-    "line-height",
-    "letter-spacing",
-    "text-align",
-    "text-decoration",
-    "text-transform",
-    "text-indent",
-    "white-space",
-    "vertical-align",
-    "overflow",
-    "overflow-wrap",
-    "word-break",
-    "box-shadow",
-    "opacity",
-    "transform",
-    "transform-origin",
-    "flex",
-    "flex-direction",
-    "flex-wrap",
-    "flex-grow",
-    "flex-shrink",
-    "flex-basis",
-    "align-items",
-    "align-content",
-    "align-self",
-    "justify-content",
-    "gap",
-    "grid-template-columns",
-    "grid-template-rows",
-    "grid-column",
-    "grid-row",
-    "object-fit",
-    "object-position",
-  ];
-
-  const styleText = properties
-    .map((property) => {
+  target.setAttribute(
+    "style",
+    STYLE_PROPS.map((property) => {
       const value = computed.getPropertyValue(property);
-      if (/url\(/i.test(value) && !/url\(\s*[\"']?(?:data|blob):/i.test(value)) {
-        if (property === "background" || property === "background-image") {
-          return `${property}:none`;
-        }
-      }
-      return `${property}:${value}`;
-    })
-    .join(";");
-
-  target.setAttribute("style", `${styleText};`);
+      return /url\(/i.test(value) && !/url\(\s*[\"']?(?:data|blob):/i.test(value) && (property === "background" || property === "background-image")
+        ? `${property}:none`
+        : `${property}:${value}`;
+    }).join(";") + ";",
+  );
 }
 
 function cloneForExport(card: HTMLElement, width: number, height: number) {
@@ -178,33 +75,16 @@ function cloneForExport(card: HTMLElement, width: number, height: number) {
 
   const sourceElements = [card, ...Array.from(card.querySelectorAll("*"))];
   const cloneElements = [clone, ...Array.from(clone.querySelectorAll("*"))];
-
   sourceElements.forEach((source, index) => {
     const target = cloneElements[index];
-    if (target instanceof Element) {
-      copyComputedStyles(source, target);
-    }
+    if (target instanceof Element) copyComputedStyles(source, target);
   });
 
-  clone
-    .querySelectorAll<HTMLElement>(".no-print, [data-gradly-download-menu]")
-    .forEach((element) => element.remove());
-
-  clone
-    .querySelectorAll<HTMLElement>("button, input, select, textarea")
-    .forEach((element) => {
-      if (element instanceof HTMLInputElement && element.type === "text") {
-        const replacement = document.createElement("span");
-        replacement.textContent = element.value;
-        replacement.setAttribute("style", element.getAttribute("style") || "");
-        element.replaceWith(replacement);
-      }
-    });
-
+  clone.querySelectorAll<HTMLElement>(".no-print, [data-gradly-download-menu]").forEach((element) => element.remove());
   return clone;
 }
 
-async function blobToDataUrl(blob: Blob) {
+function blobToDataUrl(blob: Blob) {
   return new Promise<string>((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => resolve(String(reader.result));
@@ -213,51 +93,61 @@ async function blobToDataUrl(blob: Blob) {
   });
 }
 
+async function proxyImageToDataUrl(src: string) {
+  const response = await fetch(`/api/image-proxy?url=${encodeURIComponent(src)}`, { cache: "no-store" });
+  if (!response.ok) throw new Error(`Image proxy returned ${response.status}`);
+  const type = response.headers.get("content-type") || "";
+  if (!type.toLowerCase().startsWith("image/")) throw new Error("The proxied resource is not an image");
+  return blobToDataUrl(await response.blob());
+}
+
 async function inlineExportImages(clone: HTMLElement) {
   const images = Array.from(clone.querySelectorAll<HTMLImageElement>("img"));
+  await Promise.all(images.map(async (image) => {
+    const src = (image.getAttribute("src") || "").trim();
+    if (!src || /^(?:data|blob):/i.test(src)) return;
+    try {
+      image.setAttribute("src", await proxyImageToDataUrl(src));
+      image.removeAttribute("srcset");
+      image.removeAttribute("sizes");
+    } catch {
+      image.replaceWith(document.createElement("span"));
+    }
+  }));
 
-  await Promise.all(
-    images.map(async (image) => {
-      const src = image.getAttribute("src")?.trim();
-      if (!src || /^(?:data|blob):/i.test(src)) return;
+  const svgImages = Array.from(clone.querySelectorAll<SVGImageElement>("svg image"));
+  await Promise.all(svgImages.map(async (image) => {
+    const href = (image.getAttribute("href") || image.getAttributeNS("http://www.w3.org/1999/xlink", "href") || "").trim();
+    if (!href || /^(?:data|blob):/i.test(href)) return;
+    try {
+      const dataUrl = await proxyImageToDataUrl(href);
+      image.setAttribute("href", dataUrl);
+      image.removeAttributeNS("http://www.w3.org/1999/xlink", "href");
+    } catch {
+      image.remove();
+    }
+  }));
+}
 
-      try {
-        const response = await fetch(src, { mode: "cors", credentials: "omit" });
-        if (!response.ok) throw new Error(`Image request failed with ${response.status}.`);
-        const blob = await response.blob();
-        image.setAttribute("src", await blobToDataUrl(blob));
-      } catch {
-        const replacement = document.createElement("span");
-        replacement.textContent = image.alt || "";
-        replacement.setAttribute(
-          "style",
-          image.getAttribute("style") || "display:inline-block;",
-        );
-        image.replaceWith(replacement);
-      }
-    }),
-  );
+function removeResidualExternalUrls(clone: HTMLElement) {
+  clone.querySelectorAll<HTMLElement>("*").forEach((element) => {
+    const style = element.getAttribute("style");
+    if (style && /url\(/i.test(style)) {
+      element.setAttribute("style", style.replace(/url\((?!\s*[\"']?(?:data|blob):)/gi, "none-url(").replace(/none-url\(/gi, "url(none)"));
+    }
+  });
 
-  const svgImages = Array.from(
-    clone.querySelectorAll<SVGImageElement>("svg image[href], svg image[xlink\\:href]"),
-  );
+  clone.querySelectorAll<HTMLImageElement>("img").forEach((image) => {
+    const src = image.getAttribute("src") || "";
+    if (src && !/^(?:data|blob):/i.test(src)) image.removeAttribute("src");
+    image.removeAttribute("srcset");
+    image.removeAttribute("sizes");
+  });
 
-  await Promise.all(
-    svgImages.map(async (image) => {
-      const href = image.getAttribute("href") || image.getAttributeNS("http://www.w3.org/1999/xlink", "href");
-      if (!href || /^(?:data|blob):/i.test(href)) return;
-
-      try {
-        const response = await fetch(href, { mode: "cors", credentials: "omit" });
-        if (!response.ok) throw new Error(`Image request failed with ${response.status}.`);
-        const blob = await response.blob();
-        image.setAttribute("href", await blobToDataUrl(blob));
-        image.removeAttributeNS("http://www.w3.org/1999/xlink", "href");
-      } catch {
-        image.remove();
-      }
-    }),
-  );
+  clone.querySelectorAll<SVGImageElement>("svg image").forEach((image) => {
+    const href = image.getAttribute("href") || "";
+    if (href && !/^(?:data|blob):/i.test(href)) image.remove();
+  });
 }
 
 async function renderCard() {
@@ -271,6 +161,7 @@ async function renderCard() {
   const clone = cloneForExport(card, width, height);
 
   await inlineExportImages(clone);
+  removeResidualExternalUrls(clone);
 
   const serialized = new XMLSerializer().serializeToString(clone);
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xhtml="http://www.w3.org/1999/xhtml" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}"><foreignObject width="100%" height="100%">${serialized}</foreignObject></svg>`;
@@ -280,22 +171,15 @@ async function renderCard() {
   try {
     const image = new Image();
     image.decoding = "async";
-
     await new Promise<void>((resolve, reject) => {
       image.onload = () => resolve();
-      image.onerror = () =>
-        reject(
-          new Error(
-            "The browser could not render the result card for download.",
-          ),
-        );
+      image.onerror = () => reject(new Error("The browser could not render the result card for download."));
       image.src = svgUrl;
     });
 
     const canvas = document.createElement("canvas");
     canvas.width = Math.max(1, Math.round(width * pixelRatio));
     canvas.height = Math.max(1, Math.round(height * pixelRatio));
-
     const context = canvas.getContext("2d", { alpha: false });
     if (!context) throw new Error("Your browser could not create an export canvas.");
 
@@ -315,12 +199,10 @@ function concatBytes(...parts: Uint8Array[]) {
   const total = parts.reduce((sum, part) => sum + part.length, 0);
   const output = new Uint8Array(total);
   let offset = 0;
-
   for (const part of parts) {
     output.set(part, offset);
     offset += part.length;
   }
-
   return output;
 }
 
@@ -331,115 +213,45 @@ function asciiBytes(value: string) {
 async function createPdfBlob(canvas: HTMLCanvasElement, pixelRatio: number) {
   const jpegBlob = await canvasToBlob(canvas, "image/jpeg", 0.98);
   const jpegBytes = new Uint8Array(await jpegBlob.arrayBuffer());
-
-  const widthPx = canvas.width / pixelRatio;
-  const heightPx = canvas.height / pixelRatio;
-  const pageWidthPt = (widthPx / 96) * 72;
-  const pageHeightPt = (heightPx / 96) * 72;
-
-  if (
-    !Number.isFinite(pageWidthPt) ||
-    !Number.isFinite(pageHeightPt) ||
-    pageWidthPt <= 0 ||
-    pageHeightPt <= 0
-  ) {
-    throw new Error("The result card has an invalid size for PDF export.");
-  }
-
-  const contentBytes = asciiBytes(
-    `q\n${pageWidthPt} 0 0 ${pageHeightPt} 0 0 cm\n/Im0 Do\nQ\n`,
-  );
-
+  const pageWidthPt = ((canvas.width / pixelRatio) / 96) * 72;
+  const pageHeightPt = ((canvas.height / pixelRatio) / 96) * 72;
+  const contentBytes = asciiBytes(`q\n${pageWidthPt} 0 0 ${pageHeightPt} 0 0 cm\n/Im0 Do\nQ\n`);
   const header = asciiBytes("%PDF-1.4\n%\u00e2\u00e3\u00cf\u00d3\n");
   const objects = [
     asciiBytes("1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n"),
     asciiBytes("2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n"),
-    asciiBytes(
-      `3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${pageWidthPt} ${pageHeightPt}] /Resources << /XObject << /Im0 4 0 R >> >> /Contents 5 0 R >>\nendobj\n`,
-    ),
-    concatBytes(
-      asciiBytes(
-        `4 0 obj\n<< /Type /XObject /Subtype /Image /Width ${canvas.width} /Height ${canvas.height} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${jpegBytes.length} >>\nstream\n`,
-      ),
-      jpegBytes,
-      asciiBytes("\nendstream\nendobj\n"),
-    ),
-    concatBytes(
-      asciiBytes(`5 0 obj\n<< /Length ${contentBytes.length} >>\nstream\n`),
-      contentBytes,
-      asciiBytes("endstream\nendobj\n"),
-    ),
+    asciiBytes(`3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${pageWidthPt} ${pageHeightPt}] /Resources << /XObject << /Im0 4 0 R >> >> /Contents 5 0 R >>\nendobj\n`),
+    concatBytes(asciiBytes(`4 0 obj\n<< /Type /XObject /Subtype /Image /Width ${canvas.width} /Height ${canvas.height} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${jpegBytes.length} >>\nstream\n`), jpegBytes, asciiBytes("\nendstream\nendobj\n")),
+    concatBytes(asciiBytes(`5 0 obj\n<< /Length ${contentBytes.length} >>\nstream\n`), contentBytes, asciiBytes("endstream\nendobj\n")),
   ];
-
   const chunks: Uint8Array[] = [header];
   const offsets: number[] = [0];
   let cursor = header.length;
-
-  objects.forEach((object, index) => {
-    offsets[index + 1] = cursor;
-    chunks.push(object);
-    cursor += object.length;
-  });
-
+  objects.forEach((object, index) => { offsets[index + 1] = cursor; chunks.push(object); cursor += object.length; });
   const xrefOffset = cursor;
   let xref = `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n`;
-  for (let index = 1; index <= objects.length; index += 1) {
-    xref += `${String(offsets[index]).padStart(10, "0")} 00000 n \n`;
-  }
-
-  const trailer = asciiBytes(
-    `${xref}trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xrefOffset}\n%%EOF\n`,
-  );
-
+  for (let index = 1; index <= objects.length; index += 1) xref += `${String(offsets[index]).padStart(10, "0")} 00000 n \n`;
+  const trailer = asciiBytes(`${xref}trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xrefOffset}\n%%EOF\n`);
   return new Blob([...chunks, trailer], { type: "application/pdf" });
 }
 
 async function exportResult(format: Format) {
   const { canvas, pixelRatio } = await renderCard();
   const baseName = getFileName();
-
-  if (format === "png") {
-    const blob = await canvasToBlob(canvas, "image/png");
-    downloadBlob(blob, `${baseName}.png`);
-    return;
-  }
-
-  if (format === "jpg") {
-    const blob = await canvasToBlob(canvas, "image/jpeg", 0.95);
-    downloadBlob(blob, `${baseName}.jpg`);
-    return;
-  }
-
-  const pdfBlob = await createPdfBlob(canvas, pixelRatio);
-  downloadBlob(pdfBlob, `${baseName}.pdf`);
+  if (format === "png") return downloadBlob(await canvasToBlob(canvas, "image/png"), `${baseName}.png`);
+  if (format === "jpg") return downloadBlob(await canvasToBlob(canvas, "image/jpeg", 0.95), `${baseName}.jpg`);
+  downloadBlob(await createPdfBlob(canvas, pixelRatio), `${baseName}.pdf`);
 }
 
 function formatMeta(format: Format) {
-  if (format === "png") {
-    return { label: "PNG", description: "High-quality image", icon: FileImage };
-  }
-
-  if (format === "jpg") {
-    return {
-      label: "JPG",
-      description: "Compressed image for sharing",
-      icon: FileImage,
-    };
-  }
-
-  return {
-    label: "PDF",
-    description: "Full result card document",
-    icon: FileText,
-  };
+  if (format === "png") return { label: "PNG", description: "High-quality image", icon: FileImage };
+  if (format === "jpg") return { label: "JPG", description: "Compressed image for sharing", icon: FileImage };
+  return { label: "PDF", description: "Full result card document", icon: FileText };
 }
 
 function setDownloadButtonLabel(button: HTMLButtonElement) {
   for (const node of Array.from(button.childNodes)) {
-    if (
-      node.nodeType === Node.TEXT_NODE &&
-      /download\s*\/\s*print/i.test(node.textContent || "")
-    ) {
+    if (node.nodeType === Node.TEXT_NODE && /download\s*\/\s*print/i.test(node.textContent || "")) {
       node.textContent = "Download";
       return;
     }
@@ -455,75 +267,43 @@ export default function ResultDownload() {
 
   useEffect(() => {
     const findButton = () => {
-      const navigation = document.querySelector<HTMLElement>(
-        "[data-gradly-workflow-navigation]",
-      );
+      const navigation = document.querySelector<HTMLElement>("[data-gradly-workflow-navigation]");
       if (!navigation) return;
-
-      const buttons = Array.from(
-        navigation.querySelectorAll<HTMLButtonElement>("button"),
-      );
-      const button = buttons.find((candidate) =>
-        /download\s*\/\s*print/i.test(candidate.textContent || ""),
-      );
+      const button = Array.from(navigation.querySelectorAll<HTMLButtonElement>("button")).find((candidate) => /download\s*\/\s*print/i.test(candidate.textContent || ""));
       if (!button) return;
-
       setDownloadButtonLabel(button);
       button.setAttribute("aria-haspopup", "menu");
       button.setAttribute("title", "Download result as PNG, JPG or PDF");
-
       cleanupRef.current?.();
-
       const onClick = (event: MouseEvent) => {
         event.preventDefault();
         event.stopPropagation();
         event.stopImmediatePropagation();
-
         const rect = button.getBoundingClientRect();
-        setPosition({
-          top: Math.min(
-            rect.bottom + 8,
-            Math.max(12, window.innerHeight - 250),
-          ),
-          right: Math.max(12, window.innerWidth - rect.right),
-        });
+        setPosition({ top: Math.min(rect.bottom + 8, Math.max(12, window.innerHeight - 250)), right: Math.max(12, window.innerWidth - rect.right) });
         setError("");
         setOpen((current) => !current);
       };
-
       button.addEventListener("click", onClick, true);
-      cleanupRef.current = () =>
-        button.removeEventListener("click", onClick, true);
+      cleanupRef.current = () => button.removeEventListener("click", onClick, true);
     };
-
     findButton();
     const observer = new MutationObserver(findButton);
-    observer.observe(document.body, {
-      childList: true,
-      subtree: true,
-      characterData: true,
-    });
-
-    return () => {
-      cleanupRef.current?.();
-      observer.disconnect();
-    };
+    observer.observe(document.body, { childList: true, subtree: true, characterData: true });
+    return () => { cleanupRef.current?.(); observer.disconnect(); };
   }, []);
 
   useEffect(() => {
     if (!open) return;
-
     const close = (event: MouseEvent) => {
       const target = event.target as HTMLElement | null;
       if (target?.closest("[data-gradly-download-menu]")) return;
       setOpen(false);
     };
     const reposition = () => setOpen(false);
-
     document.addEventListener("mousedown", close, true);
     window.addEventListener("resize", reposition);
     window.addEventListener("scroll", reposition, true);
-
     return () => {
       document.removeEventListener("mousedown", close, true);
       window.removeEventListener("resize", reposition);
@@ -534,81 +314,39 @@ export default function ResultDownload() {
   const download = async (format: Format) => {
     setBusy(format);
     setError("");
-
     try {
       await exportResult(format);
       setOpen(false);
     } catch (value) {
-      setError(
-        value instanceof Error
-          ? value.message
-          : "Download failed. Please try again.",
-      );
+      setError(value instanceof Error ? value.message : "Download failed. Please try again.");
     } finally {
       setBusy(null);
     }
   };
 
   if (!open && !error) return null;
-
   return createPortal(
-    <div
-      data-gradly-download-menu
-      role="menu"
-      aria-label="Download result format"
-      className="fixed z-[120] w-[290px] overflow-hidden rounded-2xl border border-slate-200 bg-white p-2 shadow-2xl"
-      style={{ top: position.top, right: position.right }}
-    >
+    <div data-gradly-download-menu role="menu" aria-label="Download result format" className="fixed z-[120] w-[290px] overflow-hidden rounded-2xl border border-slate-200 bg-white p-2 shadow-2xl" style={{ top: position.top, right: position.right }}>
       <div className="px-3 py-2">
         <div className="flex items-center gap-2">
-          <span className="grid h-8 w-8 place-items-center rounded-lg bg-[#17365D] text-white">
-            <Download size={15} />
-          </span>
-          <div>
-            <p className="text-xs font-black text-slate-900">Download result</p>
-            <p className="text-[10px] text-slate-400">Choose a file format</p>
-          </div>
+          <span className="grid h-8 w-8 place-items-center rounded-lg bg-[#17365D] text-white"><Download size={15} /></span>
+          <div><p className="text-xs font-black text-slate-900">Download result</p><p className="text-[10px] text-slate-400">Choose a file format</p></div>
         </div>
       </div>
-
       <div className="space-y-1">
         {(["png", "jpg", "pdf"] as Format[]).map((format) => {
           const meta = formatMeta(format);
           const Icon = meta.icon;
           const isBusy = busy === format;
-
           return (
-            <button
-              key={format}
-              type="button"
-              role="menuitem"
-              disabled={busy !== null}
-              onClick={() => download(format)}
-              className="flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-slate-100 text-slate-600">
-                {isBusy ? (
-                  <span className="h-4 w-4 animate-spin rounded-full border-2 border-slate-300 border-t-[#17365D]" />
-                ) : (
-                  <Icon size={16} />
-                )}
-              </span>
-              <span className="min-w-0 flex-1">
-                <span className="block text-[11px] font-black text-slate-800">{meta.label}</span>
-                <span className="block text-[9px] leading-4 text-slate-400">
-                  {isBusy ? "Preparing download…" : meta.description}
-                </span>
-              </span>
+            <button key={format} type="button" role="menuitem" disabled={busy !== null} onClick={() => download(format)} className="flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60">
+              <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-slate-100 text-slate-600">{isBusy ? <span className="h-4 w-4 animate-spin rounded-full border-2 border-slate-300 border-t-[#17365D]" /> : <Icon size={16} />}</span>
+              <span className="min-w-0 flex-1"><span className="block text-[11px] font-black text-slate-800">{meta.label}</span><span className="block text-[9px] leading-4 text-slate-400">{isBusy ? "Preparing download…" : meta.description}</span></span>
             </button>
           );
         })}
       </div>
-
-      {error && (
-        <div className="mt-2 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-[10px] font-semibold leading-4 text-red-700">
-          {error}
-        </div>
-      )}
+      {error && <div className="mt-2 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-[10px] font-semibold leading-4 text-red-700">{error}</div>}
     </div>,
     document.body,
   );
