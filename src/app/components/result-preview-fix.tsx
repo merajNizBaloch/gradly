@@ -13,17 +13,11 @@ function getPreviewTarget(dialog: HTMLElement | null): HTMLElement | null {
 }
 
 function getDraft(dialog: HTMLElement): DraftValues {
-  const fields = {
-    school: dialog.querySelector<HTMLInputElement>("[data-gradly-school-field='school']"),
-    motto: dialog.querySelector<HTMLInputElement>("[data-gradly-school-field='motto']"),
-    address: dialog.querySelector<HTMLInputElement>("[data-gradly-school-field='address']"),
-    contact: dialog.querySelector<HTMLInputElement>("[data-gradly-school-field='contact']"),
-  };
   return {
-    school: fields.school?.value ?? "",
-    motto: fields.motto?.value ?? "",
-    address: fields.address?.value ?? "",
-    contact: fields.contact?.value ?? "",
+    school: dialog.querySelector<HTMLInputElement>("[data-gradly-school-field='school']")?.value ?? "",
+    motto: dialog.querySelector<HTMLInputElement>("[data-gradly-school-field='motto']")?.value ?? "",
+    address: dialog.querySelector<HTMLInputElement>("[data-gradly-school-field='address']")?.value ?? "",
+    contact: dialog.querySelector<HTMLInputElement>("[data-gradly-school-field='contact']")?.value ?? "",
   };
 }
 
@@ -42,9 +36,9 @@ function replaceText(root: HTMLElement, from: string, to: string) {
 }
 
 function renderPreview(source: HTMLElement, target: HTMLElement, values: DraftValues): (() => void) | null {
-  const sourceRect = source.getBoundingClientRect();
-  const width = Math.max(1, sourceRect.width);
-  const height = Math.max(1, sourceRect.height);
+  const rect = source.getBoundingClientRect();
+  const width = Math.max(1, rect.width);
+  const height = Math.max(1, rect.height);
   if (width < 10 || height < 10) return null;
 
   const clone = source.cloneNode(true) as HTMLElement;
@@ -67,26 +61,16 @@ function renderPreview(source: HTMLElement, target: HTMLElement, values: DraftVa
   clone.style.transform = "none";
   clone.style.zoom = "1";
 
-  target.innerHTML = "";
+  target.replaceChildren();
   target.style.position = "relative";
   target.style.overflow = "hidden";
   target.style.minHeight = "330px";
 
   const frame = document.createElement("div");
-  frame.style.position = "absolute";
-  frame.style.left = "12px";
-  frame.style.top = "12px";
-  frame.style.right = "12px";
-  frame.style.bottom = "12px";
-  frame.style.overflow = "hidden";
+  frame.style.cssText = "position:absolute;left:12px;top:12px;right:12px;bottom:12px;overflow:hidden;";
 
   const host = document.createElement("div");
-  host.style.position = "absolute";
-  host.style.left = "0";
-  host.style.top = "0";
-  host.style.width = `${width}px`;
-  host.style.height = `${height}px`;
-  host.style.transformOrigin = "top left";
+  host.style.cssText = `position:absolute;left:0;top:0;width:${width}px;height:${height}px;transform-origin:top left;`;
   host.appendChild(clone);
   frame.appendChild(host);
   target.appendChild(frame);
@@ -135,15 +119,17 @@ function fitMainCard() {
 
 export default function ResultPreviewFix() {
   useEffect(() => {
-    let raf = 0;
-    let retryTimer = 0;
-    let lastSignature = "";
+    let frameId = 0;
     let fitPreview: (() => void) | null = null;
-    let observedTarget: HTMLElement | null = null;
+    let renderQueued = false;
+    let lastSignature = "";
+    let lastTarget: HTMLElement | null = null;
 
     const refresh = () => {
-      cancelAnimationFrame(raf);
-      raf = requestAnimationFrame(() => {
+      if (renderQueued) return;
+      renderQueued = true;
+      frameId = requestAnimationFrame(() => {
+        renderQueued = false;
         fitMainCard();
 
         const dialog = getDialog();
@@ -151,45 +137,52 @@ export default function ResultPreviewFix() {
         const source = document.querySelector<HTMLElement>(".gradly-paper");
 
         if (!dialog || !target || !source) {
-          retryTimer = window.setTimeout(refresh, 120);
+          fitPreview = null;
           return;
         }
 
         const values = getDraft(dialog);
-        const signature = JSON.stringify(values) + `|${source.offsetWidth}|${source.offsetHeight}|${target.clientWidth}|${target.clientHeight}`;
-        if (signature !== lastSignature || observedTarget !== target || target.children.length === 0) {
+        const signature = `${values.school}|${values.motto}|${values.address}|${values.contact}|${source.offsetWidth}|${source.offsetHeight}|${target.clientWidth}|${target.clientHeight}`;
+
+        if (signature !== lastSignature || lastTarget !== target || target.childElementCount === 0) {
           lastSignature = signature;
-          observedTarget = target;
+          lastTarget = target;
           fitPreview = renderPreview(source, target, values);
         }
+
         fitPreview?.();
       });
     };
 
     const onInput = (event: Event) => {
-      const target = event.target;
-      if (target instanceof HTMLInputElement && target.closest("[role='dialog'][aria-labelledby='gradly-school-dialog-title']")) {
-        lastSignature = "";
-        refresh();
+      const element = event.target;
+      if (element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement) {
+        if (element.closest("[role='dialog'][aria-labelledby='gradly-school-dialog-title']")) {
+          lastSignature = "";
+          refresh();
+        }
       }
     };
 
-    const observer = new MutationObserver(() => refresh());
-    observer.observe(document.body, { childList: true, subtree: true });
-    document.addEventListener("input", onInput, true);
-    document.addEventListener("change", onInput, true);
+    const onClick = () => {
+      window.setTimeout(refresh, 0);
+      window.setTimeout(refresh, 120);
+    };
+
     window.addEventListener("resize", refresh);
     window.visualViewport?.addEventListener("resize", refresh);
+    document.addEventListener("input", onInput, true);
+    document.addEventListener("change", onInput, true);
+    document.addEventListener("click", onClick, true);
     refresh();
 
     return () => {
-      cancelAnimationFrame(raf);
-      window.clearTimeout(retryTimer);
-      observer.disconnect();
-      document.removeEventListener("input", onInput, true);
-      document.removeEventListener("change", onInput, true);
+      cancelAnimationFrame(frameId);
       window.removeEventListener("resize", refresh);
       window.visualViewport?.removeEventListener("resize", refresh);
+      document.removeEventListener("input", onInput, true);
+      document.removeEventListener("change", onInput, true);
+      document.removeEventListener("click", onClick, true);
     };
   }, []);
 
