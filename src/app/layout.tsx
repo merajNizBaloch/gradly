@@ -3,6 +3,7 @@ import "./globals.css";
 import SiteFooter from "./components/site-footer";
 import SidebarTabs from "./components/sidebar-tabs";
 import ResultPreviewFix from "./components/result-preview-fix";
+import OverlayZoom from "./components/overlay-zoom";
 
 export const metadata: Metadata = {
   title: "Gradly — Student Result Generator",
@@ -16,6 +17,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
         {children}
         <SidebarTabs />
         <ResultPreviewFix />
+        <OverlayZoom />
         <SiteFooter />
       </body>
     </html>
