@@ -1,6 +1,5 @@
 "use client";
 
-import { MessageSquareText } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 type ReviewRemarks = {
@@ -62,9 +61,7 @@ function ensureRemarksPanel(
   panel.className = "rounded-2xl border border-gray-200 bg-white p-4 shadow-sm";
   panel.innerHTML = `
     <div class="mb-4 flex items-center gap-2 text-sm font-bold">
-      <span class="grid h-8 w-8 place-items-center rounded-lg bg-gray-50">
-        <span data-gradly-remarks-icon></span>
-      </span>
+      <span class="grid h-8 w-8 place-items-center rounded-lg bg-gray-50 text-base text-[#17365D]">✎</span>
       <span>Remarks</span>
     </div>
     <div class="space-y-3">
@@ -84,13 +81,6 @@ function ensureRemarksPanel(
     node instanceof HTMLElement && node.textContent?.toLowerCase().includes("signatures"),
   );
   sidebar.insertBefore(panel, signaturePanel?.nextSibling || null);
-
-  const iconHost = panel.querySelector<HTMLElement>("[data-gradly-remarks-icon]");
-  if (iconHost) {
-    // Use a text-safe icon fallback here; React icon rendering is not needed in this injected panel.
-    iconHost.textContent = "✎";
-    iconHost.className = "text-base font-bold text-[#17365D]";
-  }
 
   const teacher = panel.querySelector<HTMLTextAreaElement>("[data-gradly-teacher-remarks]");
   const principal = panel.querySelector<HTMLTextAreaElement>("[data-gradly-principal-remarks]");
@@ -115,6 +105,20 @@ function ensureRemarksPanel(
 function syncPreview(remarks: ReviewRemarks) {
   const paper = document.querySelector<HTMLElement>(".gradly-paper");
   if (!paper) return;
+
+  const legacySection = Array.from(paper.querySelectorAll<HTMLElement>("div")).find(
+    (node) =>
+      node !== paper.querySelector("[data-gradly-remarks-preview]") &&
+      node.textContent?.includes("Principal's Remarks") &&
+      !node.closest("[data-gradly-remarks-preview]"),
+  );
+  if (legacySection) {
+    const candidate = legacySection.parentElement === paper ? legacySection : legacySection.closest(".border.p-4") || legacySection;
+    if (candidate) {
+      candidate.setAttribute("data-gradly-auto-remarks", "true");
+      candidate.style.display = "none";
+    }
+  }
 
   let section = paper.querySelector<HTMLElement>("[data-gradly-remarks-preview]");
   if (!section) {
@@ -191,6 +195,7 @@ export default function ReviewRemarks() {
           if (!active || !data?.result) return;
           const loaded = parseRemarks(data.result.remarks);
           setRemarks(loaded);
+          remarksRef.current = loaded;
           saveStoredRemarks(loaded);
           syncPreview(loaded);
           const sidebar = findSidebar();
@@ -201,11 +206,13 @@ export default function ReviewRemarks() {
 
     const sync = () => {
       const sidebar = findSidebar();
-      if (sidebar) ensureRemarksPanel(sidebar, remarksRef.current, (next) => {
-        setRemarks(next);
-        remarksRef.current = next;
-        syncPreview(next);
-      });
+      if (sidebar) {
+        ensureRemarksPanel(sidebar, remarksRef.current, (next) => {
+          setRemarks(next);
+          remarksRef.current = next;
+          syncPreview(next);
+        });
+      }
       syncPreview(remarksRef.current);
     };
 
@@ -225,9 +232,5 @@ export default function ReviewRemarks() {
     syncPreview(remarks);
   }, [remarks]);
 
-  return (
-    <span aria-hidden="true" className="hidden">
-      <MessageSquareText size={1} />
-    </span>
-  );
+  return <span aria-hidden="true" className="hidden" />;
 }
