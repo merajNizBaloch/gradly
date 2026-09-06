@@ -23,11 +23,11 @@ function sanitizeFileName(value: string) {
 
 function getFileName() {
   const card = document.querySelector<HTMLElement>(".gradly-paper");
-  const student = Array.from(card?.querySelectorAll<HTMLElement>("p, h1, h2, h3, div") || [])
-    .map((element) => element.textContent?.trim() || "")
-    .find((text) => text.length > 1 && text.length < 80 && !text.includes("Student Progress Report"));
+  const text = card?.textContent?.replace(/\s+/g, " ").trim() || "";
+  const match = text.match(/Student\s+([^·|]+?)(?:\s+Father|\s+Roll\s+Number|\s+Class\s*&\s*Section)/i);
+  const studentName = match?.[1]?.trim();
 
-  return `gradly-${sanitizeFileName(student || "student-result")}`;
+  return `gradly-${sanitizeFileName(studentName || "student-result")}`;
 }
 
 function downloadBlob(blob: Blob, fileName: string) {
@@ -41,16 +41,30 @@ function downloadBlob(blob: Blob, fileName: string) {
   window.setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
+function canvasToBlob(canvas: HTMLCanvasElement, type: string, quality?: number) {
+  return new Promise<Blob>((resolve, reject) => {
+    canvas.toBlob(
+      (blob) => {
+        if (blob) resolve(blob);
+        else reject(new Error(`Could not create ${type.includes("jpeg") ? "JPG" : "PNG"} image.`));
+      },
+      type,
+      quality,
+    );
+  });
+}
+
 async function renderCard() {
   const card = document.querySelector<HTMLElement>(".gradly-paper");
   if (!card) throw new Error("The result card is not ready for download.");
 
   const html2canvasModule = await import("html2canvas");
   const html2canvas = html2canvasModule.default;
+  const pixelRatio = Math.min(3, Math.max(2, window.devicePixelRatio || 1));
 
   return html2canvas(card, {
     backgroundColor: "#ffffff",
-    scale: Math.min(3, Math.max(2, window.devicePixelRatio || 1)),
+    scale: pixelRatio,
     useCORS: true,
     allowTaint: false,
     logging: false,
@@ -58,7 +72,10 @@ async function renderCard() {
     removeContainer: true,
     onclone: (clonedDocument) => {
       const clonedCard = clonedDocument.querySelector<HTMLElement>(".gradly-paper");
-      clonedCard?.classList.add("gradly-export-card");
+      if (clonedCard) {
+        clonedCard.classList.add("gradly-export-card");
+        clonedCard.style.boxShadow = "none";
+      }
     },
   });
 }
@@ -68,25 +85,26 @@ async function exportResult(format: Format) {
   const baseName = getFileName();
 
   if (format === "png") {
-    canvas.toBlob((blob) => {
-      if (!blob) throw new Error("Could not create PNG image.");
-      downloadBlob(blob, `${baseName}.png`);
-    }, "image/png");
+    const blob = await canvasToBlob(canvas, "image/png");
+    downloadBlob(blob, `${baseName}.png`);
     return;
   }
 
   if (format === "jpg") {
-    canvas.toBlob((blob) => {
-      if (!blob) throw new Error("Could not create JPG image.");
-      downloadBlob(blob, `${baseName}.jpg`);
-    }, "image/jpeg", 0.95);
+    const blob = await canvasToBlob(canvas, "image/jpeg", 0.95);
+    downloadBlob(blob, `${baseName}.jpg`);
     return;
   }
 
-  const widthPx = canvas.width;
-  const heightPx = canvas.height;
-  const widthMm = (widthPx / 96) * 25.4 / (Math.min(3, Math.max(2, window.devicePixelRatio || 1)) || 1);
-  const heightMm = (heightPx / 96) * 25.4 / (Math.min(3, Math.max(2, window.devicePixelRatio || 1)) || 1);
+  const pixelRatio = Math.min(3, Math.max(2, window.devicePixelRatio || 1));
+  const widthPx = canvas.width / pixelRatio;
+  const heightPx = canvas.height / pixelRatio;
+  const widthMm = (widthPx / 96) * 25.4;
+  const heightMm = (heightPx / 96) * 25.4;
+
+  if (!Number.isFinite(widthMm) || !Number.isFinite(heightMm) || widthMm <= 0 || heightMm <= 0) {
+    throw new Error("The result card has an invalid size for PDF export.");
+  }
 
   const { jsPDF } = await import("jspdf");
   const pdf = new jsPDF({
@@ -102,9 +120,36 @@ async function exportResult(format: Format) {
 }
 
 function formatMeta(format: Format) {
-  if (format === "png") return { label: "PNG", description: "Best for transparent-quality graphics", icon: FileImage };
-  if (format === "jpg") return { label: "JPG", description: "Smaller image for sharing", icon: FileImage };
-  return { label: "PDF", description: "Print-ready result card", icon: FileText };
+  if (format === "png") {
+    return {
+      label: "PNG",
+      description: "High-quality image",
+      icon: FileImage,
+    };
+  }
+
+  if (format === "jpg") {
+    return {
+      label: "JPG",
+      description: "Compressed image for sharing",
+      icon: FileImage,
+    };
+  }
+
+  return {
+    label: "PDF",
+    description: "Full result card document",
+    icon: FileText,
+  };
+}
+
+function setDownloadButtonLabel(button: HTMLButtonElement) {
+  for (const node of Array.from(button.childNodes)) {
+    if (node.nodeType === Node.TEXT_NODE && /download\s*\/\s*print/i.test(node.textContent || "")) {
+      node.textContent = "Download";
+      return;
+    }
+  }
 }
 
 export default function ResultDownload() {
@@ -125,6 +170,10 @@ export default function ResultDownload() {
       );
       if (!button) return;
 
+      setDownloadButtonLabel(button);
+      button.setAttribute("aria-haspopup", "menu");
+      button.setAttribute("title", "Download result as PNG, JPG or PDF");
+
       cleanupRef.current?.();
 
       const onClick = (event: MouseEvent) => {
@@ -134,7 +183,7 @@ export default function ResultDownload() {
 
         const rect = button.getBoundingClientRect();
         setPosition({
-          top: Math.min(window.innerHeight - 20, rect.bottom + 8),
+          top: Math.min(rect.bottom + 8, Math.max(12, window.innerHeight - 250)),
           right: Math.max(12, window.innerWidth - rect.right),
         });
         setError("");
@@ -147,7 +196,7 @@ export default function ResultDownload() {
 
     findButton();
     const observer = new MutationObserver(findButton);
-    observer.observe(document.body, { childList: true, subtree: true });
+    observer.observe(document.body, { childList: true, subtree: true, characterData: true });
 
     return () => {
       cleanupRef.current?.();
@@ -195,6 +244,8 @@ export default function ResultDownload() {
   return createPortal(
     <div
       data-gradly-download-menu
+      role="menu"
+      aria-label="Download result format"
       className="fixed z-[120] w-[290px] overflow-hidden rounded-2xl border border-slate-200 bg-white p-2 shadow-2xl"
       style={{ top: position.top, right: position.right }}
     >
@@ -205,7 +256,7 @@ export default function ResultDownload() {
           </span>
           <div>
             <p className="text-xs font-black text-slate-900">Download result</p>
-            <p className="text-[10px] text-slate-400">Choose your file format</p>
+            <p className="text-[10px] text-slate-400">Choose a file format</p>
           </div>
         </div>
       </div>
@@ -220,6 +271,7 @@ export default function ResultDownload() {
             <button
               key={format}
               type="button"
+              role="menuitem"
               disabled={busy !== null}
               onClick={() => download(format)}
               className="flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
@@ -233,7 +285,9 @@ export default function ResultDownload() {
               </span>
               <span className="min-w-0 flex-1">
                 <span className="block text-[11px] font-black text-slate-800">{meta.label}</span>
-                <span className="block text-[9px] leading-4 text-slate-400">{isBusy ? "Preparing download…" : meta.description}</span>
+                <span className="block text-[9px] leading-4 text-slate-400">
+                  {isBusy ? "Preparing download…" : meta.description}
+                </span>
               </span>
             </button>
           );
