@@ -50,6 +50,10 @@ button { cursor: pointer; }
 
 /* Design controls live in the main workspace; keep the left sidebar focused on data entry. */
 [data-gradly-sidebar-tabs] button:nth-child(3) { display: none !important; }
+section.no-print.space-y-4 > div:nth-child(3) { display: none !important; }
+
+/* The full design library is replaced by the compact expandable control. */
+[data-gradly-hidden-design-library="true"] { display: none !important; }
 
 @media (max-width: 640px) {
   .result-paper { min-height: auto; }
