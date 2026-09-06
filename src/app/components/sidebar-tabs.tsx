@@ -1,20 +1,20 @@
 "use client";
 
-import { BarChart3, FileText, ImagePlus, PenLine, School, Upload, X, ZoomIn } from "lucide-react";
+import { BarChart3, ImagePlus, PenLine, School, Upload, UserRound, X, ZoomIn, Check } from "lucide-react";
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 
-type TabId = "marks" | "remarks" | "design";
+type TabId = "student" | "marks" | "remarks";
 type Profile = { name: string; motto: string; address: string; contact: string; logo: string; zoom: number; x: number; y: number; removeWhite: boolean };
 
 const STORAGE_KEY = "gradly-school-profile";
 const defaultProfile: Profile = { name: "Horizon Grammar School", motto: "Excellence · Character · Future", address: "Main Campus · Quetta, Balochistan", contact: "+92 300 0000000 · info@school.edu", logo: "", zoom: 100, x: 0, y: 0, removeWhite: false };
-const tabs: { id: TabId; label: string; icon: typeof BarChart3 }[] = [
-  { id: "marks", label: "Marks", icon: BarChart3 },
-  { id: "remarks", label: "Remarks & Signatures", icon: PenLine },
-  { id: "design", label: "Design", icon: FileText },
+const tabs: { id: TabId; label: string; short: string; icon: typeof BarChart3 }[] = [
+  { id: "student", label: "Student details", short: "Student", icon: UserRound },
+  { id: "marks", label: "Marks", short: "Marks", icon: BarChart3 },
+  { id: "remarks", label: "Principal & teacher", short: "Remarks", icon: PenLine },
 ];
-const panelGroups: Record<TabId, string[]> = { marks: ["Subjects & marks"], remarks: ["Signatures"], design: ["Templates & Design"] };
+const panelGroups: Record<TabId, string[]> = { student: ["Student details"], marks: ["Subjects & marks"], remarks: ["Signatures", "Remarks"] };
 
 function loadProfile(): Profile { try { const value = localStorage.getItem(STORAGE_KEY); return value ? { ...defaultProfile, ...JSON.parse(value) } : defaultProfile; } catch { return defaultProfile; } }
 
@@ -39,7 +39,7 @@ function LivePrintedResultPreview() {
 }
 
 export default function SidebarTabs() {
-  const [active, setActive] = useState<TabId>("marks");
+  const [active, setActive] = useState<TabId>("student");
   const [sidebarMount, setSidebarMount] = useState<HTMLElement | null>(null);
   const [topMount, setTopMount] = useState<HTMLElement | null>(null);
   const [schoolOpen, setSchoolOpen] = useState(false);
@@ -66,7 +66,7 @@ export default function SidebarTabs() {
   if (!sidebarMount && !topMount) return null;
 
   const schoolButton = topMount ? createPortal(<button type="button" onClick={() => setSchoolOpen(true)} className="group flex items-center gap-2 rounded-xl border border-[#17365D]/15 bg-[#17365D] px-3.5 py-2 text-sm font-extrabold text-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-md" title="Edit school profile"><span className="grid h-7 w-7 place-items-center rounded-lg bg-white/10"><School size={15} /></span><span className="hidden sm:block">School</span>{saved && <span className="h-1.5 w-1.5 rounded-full bg-emerald-300" />}</button>, topMount) : null;
-  const sidebar = sidebarMount ? createPortal(<div data-gradly-sidebar-tabs className="relative z-20 overflow-hidden rounded-2xl border border-[#d7d9dd] bg-[#111827] p-1.5 shadow-[0_8px_24px_rgba(15,23,42,0.12)]"><div className="flex items-center gap-2 px-2 pb-1.5 pt-1"><span className="h-1.5 w-1.5 rounded-full bg-emerald-400" /><span className="text-[9px] font-extrabold uppercase tracking-[0.2em] text-white/55">Result workspace</span></div><div className="grid grid-cols-3 gap-1">{tabs.map(({ id, label, icon: Icon }) => { const selected = active === id; return <button key={id} type="button" onClick={() => setActive(id)} title={label} aria-label={label} aria-pressed={selected} className={`group relative flex min-h-[54px] flex-col items-center justify-center gap-1 rounded-xl px-1.5 py-2 transition-all duration-200 ${selected ? "bg-white text-[#17365D] shadow-md" : "text-white/65 hover:bg-white/10 hover:text-white"}`}><span className={`grid h-7 w-7 place-items-center rounded-lg ${selected ? "bg-[#edf2f8]" : "bg-white/5 group-hover:bg-white/10"}`}><Icon size={15} strokeWidth={2.2} /></span><span className="text-[9px] font-extrabold leading-none">{id === "remarks" ? "Remarks" : label}</span></button>; })}</div></div>, sidebarMount) : null;
+  const sidebar = sidebarMount ? createPortal(<div data-gradly-sidebar-tabs className="relative z-20 overflow-hidden rounded-2xl border border-[#d7d9dd] bg-[#111827] p-1.5 shadow-[0_8px_24px_rgba(15,23,42,0.12)]"><div className="flex items-center justify-between px-2 pb-1.5 pt-1"><div className="flex items-center gap-2"><span className="h-1.5 w-1.5 rounded-full bg-emerald-400" /><span className="text-[9px] font-extrabold uppercase tracking-[0.2em] text-white/55">Result steps</span></div><span className="text-[9px] font-bold text-white/35">{tabs.findIndex((tab) => tab.id === active) + 1} / {tabs.length}</span></div><div className="relative px-1 pb-1">{tabs.map(({ id, label, short, icon: Icon }, index) => { const selected = active === id; const completed = index < tabs.findIndex((tab) => tab.id === active); return <div key={id} className="relative"><button type="button" onClick={() => setActive(id)} title={label} aria-label={label} aria-pressed={selected} className={`group relative flex w-full items-center gap-3 rounded-xl px-2.5 py-2.5 text-left transition-all duration-200 ${selected ? "bg-white text-[#17365D] shadow-md" : "text-white/65 hover:bg-white/10 hover:text-white"}`}><span className={`relative z-10 grid h-8 w-8 shrink-0 place-items-center rounded-lg ${selected ? "bg-[#edf2f8]" : completed ? "bg-emerald-400/15 text-emerald-300" : "bg-white/5"}`}>{completed ? <Check size={15} strokeWidth={2.5} /> : <Icon size={15} strokeWidth={2.2} />}</span><span className="min-w-0 flex-1"><span className="block text-[10px] font-extrabold uppercase tracking-[0.08em]">Step {index + 1}</span><span className={`mt-0.5 block truncate text-[11px] font-bold ${selected ? "text-[#17365D]" : "text-white/80"}`}>{label}</span></span>{selected && <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />}</button>{index < tabs.length - 1 && <span aria-hidden="true" className="absolute left-[18px] top-[44px] h-4 w-px bg-white/10" />}</div>; })}</div></div>, sidebarMount) : null;
 
   const modal = schoolOpen ? createPortal(<div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/45 p-3 backdrop-blur-md sm:p-6" onMouseDown={(e) => e.target === e.currentTarget && setSchoolOpen(false)}><div role="dialog" aria-modal="true" aria-labelledby="gradly-school-dialog-title" className="flex max-h-[94vh] w-full max-w-7xl flex-col overflow-hidden rounded-[28px] border border-white/70 bg-white shadow-2xl">
     <div className="flex shrink-0 items-center justify-between border-b border-slate-100 bg-[#fbfbf9] px-5 py-4 sm:px-7"><div className="flex items-center gap-3"><span className="grid h-10 w-10 place-items-center rounded-xl bg-[#17365D] text-white"><School size={18} /></span><div><h2 id="gradly-school-dialog-title" className="text-lg font-black text-slate-900">School profile</h2><p className="text-xs text-slate-500">Edit the complete school identity and preview it before saving.</p></div></div><button type="button" onClick={() => setSchoolOpen(false)} className="grid h-9 w-9 place-items-center rounded-full border border-slate-200 text-slate-500 hover:bg-slate-100" aria-label="Close"><X size={17}/></button></div>
