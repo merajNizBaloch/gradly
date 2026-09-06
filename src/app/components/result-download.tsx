@@ -49,23 +49,35 @@ function canvasToBlob(
   quality?: number,
 ) {
   return new Promise<Blob>((resolve, reject) => {
-    canvas.toBlob(
-      (blob) => {
-        if (blob) {
-          resolve(blob);
-          return;
-        }
+    try {
+      canvas.toBlob(
+        (blob) => {
+          if (blob) {
+            resolve(blob);
+            return;
+          }
+          reject(
+            new Error(
+              type === "image/jpeg"
+                ? "Could not create JPG image."
+                : "Could not create PNG image.",
+            ),
+          );
+        },
+        type,
+        quality,
+      );
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "SecurityError") {
         reject(
           new Error(
-            type === "image/jpeg"
-              ? "Could not create JPG image."
-              : "Could not create PNG image.",
+            "The result contains an external image that the browser blocked from export.",
           ),
         );
-      },
-      type,
-      quality,
-    );
+        return;
+      }
+      reject(error);
+    }
   });
 }
 
@@ -140,7 +152,15 @@ function copyComputedStyles(source: Element, target: Element) {
   ];
 
   const styleText = properties
-    .map((property) => `${property}:${computed.getPropertyValue(property)}`)
+    .map((property) => {
+      const value = computed.getPropertyValue(property);
+      if (/url\(/i.test(value) && !/url\(\s*[\"']?(?:data|blob):/i.test(value)) {
+        if (property === "background" || property === "background-image") {
+          return `${property}:none`;
+        }
+      }
+      return `${property}:${value}`;
+    })
     .join(";");
 
   target.setAttribute("style", `${styleText};`);
@@ -170,16 +190,74 @@ function cloneForExport(card: HTMLElement, width: number, height: number) {
     .querySelectorAll<HTMLElement>(".no-print, [data-gradly-download-menu]")
     .forEach((element) => element.remove());
 
-  clone.querySelectorAll<HTMLElement>("button, input, select, textarea").forEach((element) => {
-    if (element instanceof HTMLInputElement && element.type === "text") {
-      const replacement = document.createElement("span");
-      replacement.textContent = element.value;
-      replacement.setAttribute("style", element.getAttribute("style") || "");
-      element.replaceWith(replacement);
-    }
-  });
+  clone
+    .querySelectorAll<HTMLElement>("button, input, select, textarea")
+    .forEach((element) => {
+      if (element instanceof HTMLInputElement && element.type === "text") {
+        const replacement = document.createElement("span");
+        replacement.textContent = element.value;
+        replacement.setAttribute("style", element.getAttribute("style") || "");
+        element.replaceWith(replacement);
+      }
+    });
 
   return clone;
+}
+
+async function blobToDataUrl(blob: Blob) {
+  return new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result));
+    reader.onerror = () => reject(reader.error || new Error("Could not read image."));
+    reader.readAsDataURL(blob);
+  });
+}
+
+async function inlineExportImages(clone: HTMLElement) {
+  const images = Array.from(clone.querySelectorAll<HTMLImageElement>("img"));
+
+  await Promise.all(
+    images.map(async (image) => {
+      const src = image.getAttribute("src")?.trim();
+      if (!src || /^(?:data|blob):/i.test(src)) return;
+
+      try {
+        const response = await fetch(src, { mode: "cors", credentials: "omit" });
+        if (!response.ok) throw new Error(`Image request failed with ${response.status}.`);
+        const blob = await response.blob();
+        image.setAttribute("src", await blobToDataUrl(blob));
+      } catch {
+        const replacement = document.createElement("span");
+        replacement.textContent = image.alt || "";
+        replacement.setAttribute(
+          "style",
+          image.getAttribute("style") || "display:inline-block;",
+        );
+        image.replaceWith(replacement);
+      }
+    }),
+  );
+
+  const svgImages = Array.from(
+    clone.querySelectorAll<SVGImageElement>("svg image[href], svg image[xlink\\:href]"),
+  );
+
+  await Promise.all(
+    svgImages.map(async (image) => {
+      const href = image.getAttribute("href") || image.getAttributeNS("http://www.w3.org/1999/xlink", "href");
+      if (!href || /^(?:data|blob):/i.test(href)) return;
+
+      try {
+        const response = await fetch(href, { mode: "cors", credentials: "omit" });
+        if (!response.ok) throw new Error(`Image request failed with ${response.status}.`);
+        const blob = await response.blob();
+        image.setAttribute("href", await blobToDataUrl(blob));
+        image.removeAttributeNS("http://www.w3.org/1999/xlink", "href");
+      } catch {
+        image.remove();
+      }
+    }),
+  );
 }
 
 async function renderCard() {
@@ -191,6 +269,8 @@ async function renderCard() {
   const height = Math.max(1, Math.round(rect.height));
   const pixelRatio = Math.min(3, Math.max(2, window.devicePixelRatio || 1));
   const clone = cloneForExport(card, width, height);
+
+  await inlineExportImages(clone);
 
   const serialized = new XMLSerializer().serializeToString(clone);
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xhtml="http://www.w3.org/1999/xhtml" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}"><foreignObject width="100%" height="100%">${serialized}</foreignObject></svg>`;
