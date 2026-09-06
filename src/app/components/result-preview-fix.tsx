@@ -10,12 +10,7 @@ function readDraft(dialog: HTMLElement | null): DraftValues | null {
   if (!dialog) return null;
   const inputs = Array.from(dialog.querySelectorAll<HTMLInputElement>("input[type='text']"));
   if (inputs.length < 4) return null;
-  return {
-    school: inputs[0]?.value ?? "",
-    motto: inputs[1]?.value ?? "",
-    address: inputs[2]?.value ?? "",
-    contact: inputs[3]?.value ?? "",
-  };
+  return { school: inputs[0]?.value ?? "", motto: inputs[1]?.value ?? "", address: inputs[2]?.value ?? "", contact: inputs[3]?.value ?? "" };
 }
 
 function replaceText(root: HTMLElement, from: string, to: string) {
@@ -27,9 +22,7 @@ function replaceText(root: HTMLElement, from: string, to: string) {
     if (node.nodeValue?.includes(from)) nodes.push(node as Text);
     node = walker.nextNode();
   }
-  nodes.forEach((text) => {
-    text.nodeValue = text.nodeValue?.split(from).join(to) ?? text.nodeValue;
-  });
+  nodes.forEach((text) => { text.nodeValue = text.nodeValue?.split(from).join(to) ?? text.nodeValue; });
 }
 
 function buildPreview(source: HTMLElement, target: HTMLElement, values: DraftValues) {
@@ -41,13 +34,7 @@ function buildPreview(source: HTMLElement, target: HTMLElement, values: DraftVal
   clone.querySelectorAll("script,button,input,textarea,select,.no-print").forEach((node) => node.remove());
 
   const baseInputs = Array.from(document.querySelectorAll<HTMLInputElement>("section.no-print.space-y-4 input"));
-  const base = {
-    school: baseInputs[0]?.value ?? "",
-    motto: baseInputs[1]?.value ?? "",
-    address: baseInputs[2]?.value ?? "",
-    contact: baseInputs[3]?.value ?? "",
-  };
-
+  const base = { school: baseInputs[0]?.value ?? "", motto: baseInputs[1]?.value ?? "", address: baseInputs[2]?.value ?? "", contact: baseInputs[3]?.value ?? "" };
   replaceText(clone, base.school, values.school);
   replaceText(clone, base.motto, values.motto);
   replaceText(clone, base.address, values.address);
@@ -80,7 +67,6 @@ function buildPreview(source: HTMLElement, target: HTMLElement, values: DraftVal
   host.style.height = `${height}px`;
   host.style.flex = "0 0 auto";
   host.style.transformOrigin = "top left";
-  host.style.setProperty("--gradly-preview-scale", "1");
   host.appendChild(clone);
   frame.appendChild(host);
   target.replaceChildren(frame);
@@ -90,8 +76,6 @@ function buildPreview(source: HTMLElement, target: HTMLElement, values: DraftVal
     const availableHeight = Math.max(1, target.clientHeight - 24);
     const scale = Math.min(1, availableWidth / width, availableHeight / height);
     host.style.transform = `scale(${scale})`;
-    frame.style.alignItems = "flex-start";
-    frame.style.justifyContent = "center";
   };
 
   fit();
@@ -101,10 +85,15 @@ function buildPreview(source: HTMLElement, target: HTMLElement, values: DraftVal
 function findOverlayTarget(): { dialog: HTMLElement; target: HTMLElement } | null {
   const dialog = document.querySelector<HTMLElement>("[role='dialog'][aria-labelledby='gradly-school-dialog-title']");
   if (!dialog) return null;
+
   const labels = Array.from(dialog.querySelectorAll("span"));
   const label = labels.find((el) => el.textContent?.trim() === "Printed result preview");
   const panel = label?.parentElement?.parentElement;
-  const target = panel?.querySelector<HTMLElement>("[data-gradly-preview-target]");
+
+  // New stable target, with a fallback for the current live preview markup.
+  const target = panel?.querySelector<HTMLElement>("[data-gradly-preview-target]")
+    ?? panel?.querySelector<HTMLElement>("div.mx-auto.h-full.w-full.overflow-hidden.rounded-md.bg-white.shadow-lg");
+
   return target ? { dialog, target } : null;
 }
 
@@ -120,8 +109,9 @@ function fitMainCard() {
   source.style.height = source.style.height || "297mm";
 
   const rect = source.getBoundingClientRect();
-  const width = Math.max(1, rect.width / (parseFloat(getComputedStyle(source).zoom || "1") || 1));
-  const height = Math.max(1, rect.height / (parseFloat(getComputedStyle(source).zoom || "1") || 1));
+  const zoom = parseFloat(getComputedStyle(source).zoom || "1") || 1;
+  const width = Math.max(1, rect.width / zoom);
+  const height = Math.max(1, rect.height / zoom);
 
   if (window.innerWidth <= 640) {
     const scale = Math.min(1, Math.max(0.05, (window.innerWidth - 24) / width));
