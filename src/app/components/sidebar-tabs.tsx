@@ -2,6 +2,7 @@
 
 import { BarChart3, FileText, School, PenLine } from "lucide-react";
 import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 
 type TabId = "school" | "marks" | "remarks" | "design";
 
@@ -21,28 +22,39 @@ const panelGroups: Record<TabId, string[]> = {
 
 export default function SidebarTabs() {
   const [active, setActive] = useState<TabId>("school");
+  const [mount, setMount] = useState<HTMLElement | null>(null);
 
   useEffect(() => {
-    const sidebar = document.querySelector<HTMLElement>("section.no-print.space-y-4");
-    if (!sidebar) return;
+    const findSidebar = () => {
+      const sidebar = document.querySelector<HTMLElement>("section.no-print.space-y-4");
+      if (sidebar) setMount(sidebar);
+    };
 
-    const panels = Array.from(sidebar.children).filter(
+    findSidebar();
+    const observer = new MutationObserver(findSidebar);
+    observer.observe(document.body, { childList: true, subtree: true });
+    return () => observer.disconnect();
+  }, []);
+
+  useEffect(() => {
+    if (!mount) return;
+
+    const panels = Array.from(mount.children).filter(
       (node): node is HTMLElement => node instanceof HTMLElement && !node.hasAttribute("data-gradly-sidebar-tabs")
     );
 
-    const sync = (tab: TabId) => {
-      panels.forEach((panel) => {
-        const title = panel.querySelector(".mb-4")?.textContent?.trim() ?? "";
-        const visible = panelGroups[tab].some((name) => title.includes(name));
-        panel.style.display = visible ? "" : "none";
-      });
-    };
+    panels.forEach((panel) => {
+      const title = panel.querySelector(".mb-4")?.textContent?.trim() ?? "";
+      const visible = panelGroups[active].some((name) => title.includes(name));
+      panel.style.display = visible ? "" : "none";
+    });
 
-    sync(active);
     return () => panels.forEach((panel) => (panel.style.display = ""));
-  }, [active]);
+  }, [active, mount]);
 
-  return (
+  if (!mount) return null;
+
+  return createPortal(
     <div
       data-gradly-sidebar-tabs
       className="sticky top-0 z-20 mb-1 overflow-hidden rounded-2xl border border-[#d9d9d4] bg-white/95 p-1.5 shadow-sm backdrop-blur"
@@ -68,6 +80,7 @@ export default function SidebarTabs() {
           );
         })}
       </div>
-    </div>
+    </div>,
+    mount
   );
 }
