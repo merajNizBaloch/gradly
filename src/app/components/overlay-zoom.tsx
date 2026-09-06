@@ -38,13 +38,20 @@ export default function OverlayZoom() {
 
   useEffect(() => {
     if (!target) return;
+
     const applyTransform = () => {
       const host = target.querySelector<HTMLElement>("div > div");
       if (!host) return;
+
       const base = Number(host.dataset.gradlyBaseScale || "1");
       host.dataset.gradlyBaseScale = String(base);
-      host.style.transform = `translate(${position.x}px, ${position.y}px) scale(${base * zoom / 100})`;
-      host.style.transformOrigin = "top left";
+
+      // Always use the preview center as the neutral position. The arrow controls
+      // then move the whole fixed-size card relative to that true center.
+      host.style.left = "50%";
+      host.style.top = "50%";
+      host.style.transformOrigin = "center center";
+      host.style.transform = `translate(calc(-50% + ${position.x}px), calc(-50% + ${position.y}px)) scale(${base * zoom / 100})`;
     };
 
     applyTransform();
