@@ -149,7 +149,9 @@ function syncPreview(values: ReviewData) {
     !node.hasAttribute("data-gradly-signatures-preview"),
   );
   if (legacySection) {
-    const candidate = legacySection.parentElement === paper ? legacySection : legacySection.closest(".border.p-4") || legacySection;
+    const candidate = (legacySection.parentElement === paper
+      ? legacySection
+      : legacySection.closest<HTMLElement>(".border.p-4")) || legacySection;
     if (candidate && !candidate.hasAttribute("data-gradly-remarks-preview")) {
       candidate.setAttribute("data-gradly-auto-remarks", "true");
       candidate.style.display = "none";
