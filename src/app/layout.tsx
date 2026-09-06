@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 import "./globals.css";
 import "./sidebar-unified.css";
 import SiteFooter from "./components/site-footer";
@@ -18,7 +19,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
   return (
     <html lang="en">
       <body>
-        {children}
+        <Suspense fallback={null}>{children}</Suspense>
         <CompactDesignControl />
         <SidebarTabs />
         <ReviewRemarks />
