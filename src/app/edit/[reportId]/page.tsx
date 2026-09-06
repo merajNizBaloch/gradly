@@ -3,11 +3,6 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
-type LoadedResult = {
-  report: { report_id: string; school_name: string; exam_name: string; academic_session: string; student_name: string; father_guardian: string | null; roll_number: string | null; class_section: string | null; date_of_birth: string | null; attendance_present: number | null; attendance_total: number | null; position: number | null; student_photo_url: string | null; template: string; grading_scale: unknown; };
-  subjects: { id: string; subject_name: string; total_marks: number; obtained_marks: number }[];
-};
-
 export default function EditResultPage({ params }: { params: Promise<{ reportId: string }> }) {
   const router = useRouter();
   const [error, setError] = useState("");
