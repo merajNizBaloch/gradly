@@ -4,7 +4,6 @@ import { useEffect, useState } from "react";
 import { Download, FileImage, FileText, X } from "lucide-react";
 
 const EXPORT_BUTTON_TEXT = "Download / Print";
-
 type ExportFormat = "pdf" | "jpg" | "png";
 
 function dataUrlFromCanvas(canvas: HTMLCanvasElement, type: "image/png" | "image/jpeg") {
@@ -53,6 +52,22 @@ async function loadJsPdf() {
   const value = (window as Window & { jspdf?: { jsPDF: new (options: Record<string, unknown>) => any } }).jspdf;
   if (!value?.jsPDF) throw new Error("PDF exporter is unavailable.");
   return value.jsPDF;
+}
+
+function getPdfSizeMm(source: HTMLElement, canvas: HTMLCanvasElement) {
+  const computed = window.getComputedStyle(source);
+  const cssToMm = (value: string) => {
+    const parsed = Number.parseFloat(value);
+    return Number.isFinite(parsed) ? parsed * 25.4 / 96 : 0;
+  };
+
+  const widthMm = computed.width.endsWith("px") ? cssToMm(computed.width) : Number.parseFloat(computed.width);
+  const heightMm = computed.height.endsWith("px") ? cssToMm(computed.height) : Number.parseFloat(computed.height);
+
+  if (widthMm > 0 && heightMm > 0) return { widthMm, heightMm };
+
+  const ratio = canvas.width / canvas.height;
+  return ratio >= 1 ? { widthMm: 297, heightMm: 210 } : { widthMm: 210, heightMm: 297 };
 }
 
 export default function ResultExporter() {
@@ -109,8 +124,7 @@ export default function ResultExporter() {
       }
 
       const JsPDF = await loadJsPdf();
-      const widthMm = canvas.width / canvas.height >= 1 ? 297 : 210;
-      const heightMm = canvas.width / canvas.height >= 1 ? 210 : 297;
+      const { widthMm, heightMm } = getPdfSizeMm(source, canvas);
       const pdf = new JsPDF({
         orientation: widthMm > heightMm ? "landscape" : "portrait",
         unit: "mm",
@@ -118,8 +132,7 @@ export default function ResultExporter() {
         compress: true,
       });
       const imageData = dataUrlFromCanvas(canvas, "image/jpeg");
-      const margin = 0;
-      pdf.addImage(imageData, "JPEG", margin, margin, widthMm, heightMm, undefined, "FAST");
+      pdf.addImage(imageData, "JPEG", 0, 0, widthMm, heightMm, undefined, "FAST");
       pdf.save(`${filenameBase}.pdf`);
       setOpen(false);
     } catch (cause) {
