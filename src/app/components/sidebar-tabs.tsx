@@ -38,6 +38,10 @@ function LivePrintedResultPreview({ draft, base }: { draft: Profile; base: Profi
     const source = document.querySelector<HTMLElement>(".gradly-paper");
     const target = targetRef.current;
     if (!source || !target) return;
+
+    const sourceRect = source.getBoundingClientRect();
+    const sourceWidth = Math.max(1, sourceRect.width);
+    const sourceHeight = Math.max(1, sourceRect.height);
     const clone = source.cloneNode(true) as HTMLElement;
     clone.querySelectorAll("script,button,input,textarea,select,.no-print").forEach((node) => node.remove());
 
@@ -53,13 +57,62 @@ function LivePrintedResultPreview({ draft, base }: { draft: Profile; base: Profi
 
     const logo = clone.querySelector<HTMLImageElement>("img[alt='School logo']");
     if (logo) { if (draft.logo) { logo.src = draft.logo; logo.style.transform = `translate(${draft.x}%, ${draft.y}%) scale(${draft.zoom / 100})`; } else logo.remove(); }
-    clone.style.width = "100%"; clone.style.height = "auto"; clone.style.minHeight = "0"; clone.style.aspectRatio = "auto"; clone.style.margin = "0"; clone.style.boxShadow = "none"; clone.style.transform = "none";
+
+    // Keep the cloned card at the exact rendered print dimensions. Only the
+    // outer transform is allowed to scale it to fit the available preview area.
+    clone.style.width = `${sourceWidth}px`;
+    clone.style.height = `${sourceHeight}px`;
+    clone.style.minWidth = `${sourceWidth}px`;
+    clone.style.minHeight = `${sourceHeight}px`;
+    clone.style.maxWidth = "none";
+    clone.style.maxHeight = "none";
+    clone.style.flex = "none";
+    clone.style.margin = "0";
+    clone.style.boxShadow = "none";
+    clone.style.transform = "none";
+    clone.style.aspectRatio = "auto";
     clone.style.backgroundImage = draft.logo ? `linear-gradient(rgba(255,255,255,${draft.removeWhite ? 0.72 : 0.90}),rgba(255,255,255,${draft.removeWhite ? 0.72 : 0.90})),url(\"${draft.logo}\")` : "none";
-    clone.style.backgroundPosition = `${50 + draft.x}% ${50 + draft.y}%`; clone.style.backgroundSize = `${48 * draft.zoom / 100}% auto`; clone.style.backgroundRepeat = "no-repeat";
-    target.replaceChildren(clone);
+    clone.style.backgroundPosition = `${50 + draft.x}% ${50 + draft.y}%`;
+    clone.style.backgroundSize = `${48 * draft.zoom / 100}% auto`;
+    clone.style.backgroundRepeat = "no-repeat";
+
+    const frame = document.createElement("div");
+    frame.style.position = "relative";
+    frame.style.width = "100%";
+    frame.style.height = "100%";
+    frame.style.minWidth = "0";
+    frame.style.minHeight = "0";
+    frame.style.overflow = "hidden";
+
+    const scaleHost = document.createElement("div");
+    scaleHost.style.position = "absolute";
+    scaleHost.style.left = "0";
+    scaleHost.style.top = "0";
+    scaleHost.style.width = `${sourceWidth}px`;
+    scaleHost.style.height = `${sourceHeight}px`;
+    scaleHost.style.transformOrigin = "top left";
+    scaleHost.style.transform = "scale(1)";
+    scaleHost.appendChild(clone);
+    frame.appendChild(scaleHost);
+    target.replaceChildren(frame);
+
+    const updateScale = () => {
+      const availableWidth = Math.max(1, target.clientWidth - 24);
+      const availableHeight = Math.max(1, target.clientHeight - 24);
+      const scale = Math.min(1, availableWidth / sourceWidth, availableHeight / sourceHeight);
+      scaleHost.style.transform = `scale(${scale})`;
+      frame.style.width = `${Math.max(1, sourceWidth * scale)}px`;
+      frame.style.height = `${Math.max(1, sourceHeight * scale)}px`;
+      frame.style.margin = "0 auto";
+    };
+
+    updateScale();
+    const resizeObserver = new ResizeObserver(updateScale);
+    resizeObserver.observe(target);
+    return () => resizeObserver.disconnect();
   }, [draft, base]);
 
-  return <div className="flex min-h-0 flex-col rounded-2xl border border-slate-200 bg-slate-100 p-3 shadow-inner"><div className="mb-2 flex shrink-0 items-center justify-between px-1"><div><span className="text-[9px] font-extrabold uppercase tracking-[0.16em] text-slate-400">Printed result preview</span><p className="mt-0.5 text-[10px] text-slate-400">The actual result-card layout, scaled for editing.</p></div><span className="rounded-full bg-emerald-50 px-2 py-1 text-[9px] font-bold text-emerald-600">LIVE</span></div><div className="min-h-0 flex-1 overflow-auto rounded-xl border border-slate-300 bg-slate-200/70 p-3"><div ref={targetRef} className="mx-auto w-full max-w-[500px] overflow-hidden rounded-md bg-white shadow-lg" /></div></div>;
+  return <div className="flex min-h-0 flex-col rounded-2xl border border-slate-200 bg-slate-100 p-3 shadow-inner"><div className="mb-2 flex shrink-0 items-center justify-between px-1"><div><span className="text-[9px] font-extrabold uppercase tracking-[0.16em] text-slate-400">Printed result preview</span><p className="mt-0.5 text-[10px] text-slate-400">The actual result-card layout, scaled for editing.</p></div><span className="rounded-full bg-emerald-50 px-2 py-1 text-[9px] font-bold text-emerald-600">LIVE</span></div><div className="min-h-0 flex-1 overflow-auto rounded-xl border border-slate-300 bg-slate-200/70 p-3"><div ref={targetRef} className="mx-auto h-full w-full overflow-hidden rounded-md bg-white shadow-lg" /></div></div>;
 }
 
 export default function SidebarTabs() {
