@@ -43,7 +43,11 @@ function downloadBlob(blob: Blob, fileName: string) {
   window.setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
-function canvasToBlob(canvas: HTMLCanvasElement, type: string, quality?: number) {
+function canvasToBlob(
+  canvas: HTMLCanvasElement,
+  type: "image/png" | "image/jpeg",
+  quality?: number,
+) {
   return new Promise<Blob>((resolve, reject) => {
     canvas.toBlob(
       (blob) => {
@@ -51,10 +55,11 @@ function canvasToBlob(canvas: HTMLCanvasElement, type: string, quality?: number)
           resolve(blob);
           return;
         }
-
         reject(
           new Error(
-            `Could not create ${type.includes("jpeg") ? "JPG" : "PNG"} image.`,
+            type === "image/jpeg"
+              ? "Could not create JPG image."
+              : "Could not create PNG image.",
           ),
         );
       },
@@ -62,6 +67,168 @@ function canvasToBlob(canvas: HTMLCanvasElement, type: string, quality?: number)
       quality,
     );
   });
+}
+
+function copyComputedStyles(source: Element, target: Element) {
+  const computed = window.getComputedStyle(source);
+  const properties = [
+    "box-sizing",
+    "display",
+    "position",
+    "top",
+    "right",
+    "bottom",
+    "left",
+    "width",
+    "height",
+    "min-width",
+    "min-height",
+    "max-width",
+    "max-height",
+    "margin",
+    "padding",
+    "border",
+    "border-top",
+    "border-right",
+    "border-bottom",
+    "border-left",
+    "border-radius",
+    "background",
+    "background-color",
+    "background-image",
+    "background-size",
+    "background-position",
+    "background-repeat",
+    "color",
+    "font",
+    "font-family",
+    "font-size",
+    "font-weight",
+    "font-style",
+    "line-height",
+    "letter-spacing",
+    "text-align",
+    "text-decoration",
+    "text-transform",
+    "text-indent",
+    "white-space",
+    "vertical-align",
+    "overflow",
+    "overflow-wrap",
+    "word-break",
+    "box-shadow",
+    "opacity",
+    "transform",
+    "transform-origin",
+    "flex",
+    "flex-direction",
+    "flex-wrap",
+    "flex-grow",
+    "flex-shrink",
+    "flex-basis",
+    "align-items",
+    "align-content",
+    "align-self",
+    "justify-content",
+    "gap",
+    "grid-template-columns",
+    "grid-template-rows",
+    "grid-column",
+    "grid-row",
+    "object-fit",
+    "object-position",
+  ];
+
+  const styleText = properties
+    .map((property) => `${property}:${computed.getPropertyValue(property)}`)
+    .join(";");
+
+  target.setAttribute("style", `${styleText};`);
+}
+
+function cloneForExport(card: HTMLElement, width: number, height: number) {
+  const clone = card.cloneNode(true) as HTMLElement;
+  clone.setAttribute("xmlns", "http://www.w3.org/1999/xhtml");
+  clone.style.width = `${width}px`;
+  clone.style.height = `${height}px`;
+  clone.style.minHeight = `${height}px`;
+  clone.style.margin = "0";
+  clone.style.boxShadow = "none";
+  clone.style.overflow = "hidden";
+
+  const sourceElements = [card, ...Array.from(card.querySelectorAll("*"))];
+  const cloneElements = [clone, ...Array.from(clone.querySelectorAll("*"))];
+
+  sourceElements.forEach((source, index) => {
+    const target = cloneElements[index];
+    if (target instanceof Element) {
+      copyComputedStyles(source, target);
+    }
+  });
+
+  clone
+    .querySelectorAll<HTMLElement>(".no-print, [data-gradly-download-menu]")
+    .forEach((element) => element.remove());
+
+  clone.querySelectorAll<HTMLElement>("button, input, select, textarea").forEach((element) => {
+    if (element instanceof HTMLInputElement && element.type === "text") {
+      const replacement = document.createElement("span");
+      replacement.textContent = element.value;
+      replacement.setAttribute("style", element.getAttribute("style") || "");
+      element.replaceWith(replacement);
+    }
+  });
+
+  return clone;
+}
+
+async function renderCard() {
+  const card = document.querySelector<HTMLElement>(".gradly-paper");
+  if (!card) throw new Error("The result card is not ready for download.");
+
+  const rect = card.getBoundingClientRect();
+  const width = Math.max(1, Math.round(rect.width));
+  const height = Math.max(1, Math.round(rect.height));
+  const pixelRatio = Math.min(3, Math.max(2, window.devicePixelRatio || 1));
+  const clone = cloneForExport(card, width, height);
+
+  const serialized = new XMLSerializer().serializeToString(clone);
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xhtml="http://www.w3.org/1999/xhtml" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}"><foreignObject width="100%" height="100%">${serialized}</foreignObject></svg>`;
+  const svgBlob = new Blob([svg], { type: "image/svg+xml;charset=utf-8" });
+  const svgUrl = URL.createObjectURL(svgBlob);
+
+  try {
+    const image = new Image();
+    image.decoding = "async";
+
+    await new Promise<void>((resolve, reject) => {
+      image.onload = () => resolve();
+      image.onerror = () =>
+        reject(
+          new Error(
+            "The browser could not render the result card for download.",
+          ),
+        );
+      image.src = svgUrl;
+    });
+
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.max(1, Math.round(width * pixelRatio));
+    canvas.height = Math.max(1, Math.round(height * pixelRatio));
+
+    const context = canvas.getContext("2d", { alpha: false });
+    if (!context) throw new Error("Your browser could not create an export canvas.");
+
+    context.fillStyle = "#ffffff";
+    context.fillRect(0, 0, canvas.width, canvas.height);
+    context.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
+    context.drawImage(image, 0, 0, width, height);
+    context.setTransform(1, 0, 0, 1, 0, 0);
+
+    return { canvas, pixelRatio };
+  } finally {
+    URL.revokeObjectURL(svgUrl);
+  }
 }
 
 function concatBytes(...parts: Uint8Array[]) {
@@ -85,10 +252,10 @@ async function createPdfBlob(canvas: HTMLCanvasElement, pixelRatio: number) {
   const jpegBlob = await canvasToBlob(canvas, "image/jpeg", 0.98);
   const jpegBytes = new Uint8Array(await jpegBlob.arrayBuffer());
 
-  const cssWidthPx = canvas.width / pixelRatio;
-  const cssHeightPx = canvas.height / pixelRatio;
-  const pageWidthPt = (cssWidthPx / 96) * 72;
-  const pageHeightPt = (cssHeightPx / 96) * 72;
+  const widthPx = canvas.width / pixelRatio;
+  const heightPx = canvas.height / pixelRatio;
+  const pageWidthPt = (widthPx / 96) * 72;
+  const pageHeightPt = (heightPx / 96) * 72;
 
   if (
     !Number.isFinite(pageWidthPt) ||
@@ -99,10 +266,11 @@ async function createPdfBlob(canvas: HTMLCanvasElement, pixelRatio: number) {
     throw new Error("The result card has an invalid size for PDF export.");
   }
 
-  const content = `q\n${pageWidthPt} 0 0 ${pageHeightPt} 0 0 cm\n/Im0 Do\nQ\n`;
-  const contentBytes = asciiBytes(content);
+  const contentBytes = asciiBytes(
+    `q\n${pageWidthPt} 0 0 ${pageHeightPt} 0 0 cm\n/Im0 Do\nQ\n`,
+  );
 
-  const header = asciiBytes("%PDF-1.4\n%âãÏÓ\n");
+  const header = asciiBytes("%PDF-1.4\n%\u00e2\u00e3\u00cf\u00d3\n");
   const objects = [
     asciiBytes("1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n"),
     asciiBytes("2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n"),
@@ -146,42 +314,6 @@ async function createPdfBlob(canvas: HTMLCanvasElement, pixelRatio: number) {
   return new Blob([...chunks, trailer], { type: "application/pdf" });
 }
 
-async function renderCard() {
-  const card = document.querySelector<HTMLElement>(".gradly-paper");
-  if (!card) throw new Error("The result card is not ready for download.");
-
-  const { toCanvas } = await import("html-to-image");
-  const pixelRatio = Math.min(3, Math.max(2, window.devicePixelRatio || 1));
-
-  try {
-    const canvas = await toCanvas(card, {
-      backgroundColor: "#ffffff",
-      pixelRatio,
-      cacheBust: true,
-      skipFonts: true,
-      filter: (node) => {
-        if (node instanceof HTMLElement) {
-          return (
-            !node.classList.contains("no-print") &&
-            !node.hasAttribute("data-gradly-download-menu")
-          );
-        }
-        return true;
-      },
-    });
-
-    if (!canvas.width || !canvas.height) {
-      throw new Error("The result card produced an empty image.");
-    }
-
-    return { canvas, pixelRatio };
-  } catch (error) {
-    const message =
-      error instanceof Error ? error.message : "Unknown rendering error.";
-    throw new Error(`Could not render the result card. ${message}`);
-  }
-}
-
 async function exportResult(format: Format) {
   const { canvas, pixelRatio } = await renderCard();
   const baseName = getFileName();
@@ -204,11 +336,7 @@ async function exportResult(format: Format) {
 
 function formatMeta(format: Format) {
   if (format === "png") {
-    return {
-      label: "PNG",
-      description: "High-quality image",
-      icon: FileImage,
-    };
+    return { label: "PNG", description: "High-quality image", icon: FileImage };
   }
 
   if (format === "jpg") {
@@ -262,10 +390,7 @@ export default function ResultDownload() {
 
       setDownloadButtonLabel(button);
       button.setAttribute("aria-haspopup", "menu");
-      button.setAttribute(
-        "title",
-        "Download result as PNG, JPG or PDF",
-      );
+      button.setAttribute("title", "Download result as PNG, JPG or PDF");
 
       cleanupRef.current?.();
 
