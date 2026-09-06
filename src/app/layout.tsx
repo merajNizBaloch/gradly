@@ -3,6 +3,7 @@ import "./globals.css";
 import "./sidebar-unified.css";
 import SiteFooter from "./components/site-footer";
 import SidebarTabs from "./components/sidebar-tabs";
+import ResultExporter from "./components/result-exporter";
 import ResultPreviewFix from "./components/result-preview-fix";
 import OverlayZoom from "./components/overlay-zoom";
 import CompactDesignControl from "./components/compact-design-control";
@@ -19,6 +20,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
         {children}
         <CompactDesignControl />
         <SidebarTabs />
+        <ResultExporter />
         <ResultPreviewFix />
         <OverlayZoom />
         <SiteFooter />
