@@ -48,6 +48,9 @@ button { cursor: pointer; }
   background-color: transparent !important;
 }
 
+/* Design controls live in the main workspace; keep the left sidebar focused on data entry. */
+[data-gradly-sidebar-tabs] button:nth-child(3) { display: none !important; }
+
 @media (max-width: 640px) {
   .result-paper { min-height: auto; }
 }
