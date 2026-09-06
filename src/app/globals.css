@@ -48,9 +48,8 @@ button { cursor: pointer; }
   background-color: transparent !important;
 }
 
-/* Design controls live in the main workspace; keep the left sidebar focused on data entry. */
+/* Hide only the legacy Design tab. Do not hide sidebar panels by child position. */
 [data-gradly-sidebar-tabs] button:nth-child(3) { display: none !important; }
-section.no-print.space-y-4 > div:nth-child(3) { display: none !important; }
 
 /* The full design library is replaced by the compact expandable control. */
 [data-gradly-hidden-design-library="true"] { display: none !important; }
