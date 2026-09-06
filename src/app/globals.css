@@ -78,6 +78,61 @@ section.no-print.space-y-4 > [data-gradly-workflow-header] + * {
   position: relative;
 }
 
+/* Compact, easy-to-scan workflow header. */
+[data-gradly-workflow] {
+  margin-bottom: 10px !important;
+  border-radius: 14px !important;
+  padding: 11px 12px !important;
+  box-shadow: 0 4px 14px rgba(15,23,42,.05) !important;
+}
+
+[data-gradly-workflow] svg {
+  display: none !important;
+}
+
+[data-gradly-workflow] .mt-1.text-sm {
+  font-size: 13px !important;
+  line-height: 18px !important;
+}
+
+[data-gradly-workflow] .mt-3.h-1\.5 {
+  height: 3px !important;
+  margin-top: 9px !important;
+}
+
+[data-gradly-workflow] .mt-3.flex.items-center.gap-1\.5 {
+  margin-top: 9px !important;
+  gap: 6px !important;
+}
+
+[data-gradly-workflow] .mt-3.flex.items-center.gap-1\.5 > div {
+  gap: 6px !important;
+}
+
+[data-gradly-workflow] .mt-3.flex.items-center.gap-1\.5 > div > span:first-child {
+  width: 20px !important;
+  height: 20px !important;
+  border-radius: 999px !important;
+  font-size: 8px !important;
+}
+
+[data-gradly-workflow] .mt-3.flex.items-center.gap-1\.5 > div > span:nth-child(2) {
+  font-size: 9px !important;
+  letter-spacing: .01em !important;
+}
+
+/* Hide the repeated explanatory card; the active step title already explains what to do. */
+[data-gradly-workflow] .mt-3.flex.items-start.gap-2.rounded-xl {
+  display: none !important;
+}
+
+/* Keep validation visible but compact. */
+[data-gradly-workflow] .mt-2.rounded-xl.border {
+  margin-top: 8px !important;
+  padding: 7px 9px !important;
+  border-radius: 9px !important;
+}
+
 [data-gradly-workflow-navigation] {
   position: static !important;
 }
@@ -89,13 +144,17 @@ section.no-print.space-y-4 > [data-gradly-workflow-header] + * {
   .result-paper { min-height: auto; }
 
   [data-gradly-workflow] {
-    border-radius: 16px !important;
-    padding: 12px !important;
+    border-radius: 12px !important;
+    padding: 10px !important;
   }
 
   [data-gradly-workflow-navigation] {
-    border-radius: 16px !important;
-    padding: 10px !important;
+    border-radius: 12px !important;
+    padding: 9px !important;
+  }
+
+  [data-gradly-workflow] .mt-3.flex.items-center.gap-1\.5 > div > span:nth-child(2) {
+    font-size: 8px !important;
   }
 }
 
