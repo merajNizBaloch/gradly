@@ -163,9 +163,9 @@ function syncPreview(values: ReviewData) {
     else paper.appendChild(remarksSection);
   }
 
-  const signatureState = `${values.teacherSignature.length}:${values.principalSignature.length}`;
-  if (remarksSection.dataset.signatureState !== `${values.teacher}|${values.principal}|${signatureState}`) {
-    remarksSection.dataset.signatureState = `${values.teacher}|${values.principal}|${signatureState}`;
+  const reviewMarkupKey = `${values.teacher}|${values.principal}|${values.teacherSignature.length}:${values.principalSignature.length}`;
+  if (remarksSection.dataset.reviewMarkup !== reviewMarkupKey) {
+    remarksSection.dataset.reviewMarkup = reviewMarkupKey;
     remarksSection.innerHTML = `
       <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.12em;color:#17365D">Teacher's Remarks</div>
       <div style="margin-top:4px;font-size:14px;font-weight:500;line-height:1.6;color:#17202a;white-space:pre-wrap">${escapeHtml(values.teacher || "—")}</div>
@@ -174,15 +174,18 @@ function syncPreview(values: ReviewData) {
     `;
   }
 
+  const originalFooter = paper.querySelector<HTMLElement>(".mt-7.grid.grid-cols-2.gap-10.pt-5.text-center");
+  if (originalFooter && !originalFooter.hasAttribute("data-gradly-signatures-original")) {
+    originalFooter.setAttribute("data-gradly-signatures-original", "true");
+    originalFooter.style.display = "none";
+  }
+
   let signatures = paper.querySelector<HTMLElement>("[data-gradly-signatures-preview]");
   if (!signatures) {
     signatures = document.createElement("div");
     signatures.setAttribute("data-gradly-signatures-preview", "true");
     signatures.style.cssText = "margin-top:22px;display:grid;grid-template-columns:1fr 1fr;gap:40px;padding-top:18px;";
-    const existingFooter = Array.from(paper.querySelectorAll<HTMLElement>("div")).find((node) =>
-      node.textContent?.trim() === "Class Teacher" || node.textContent?.trim() === "Principal / Head",
-    );
-    if (existingFooter?.parentElement) existingFooter.parentElement.replaceWith(signatures);
+    if (originalFooter?.parentElement) originalFooter.parentElement.appendChild(signatures);
     else paper.appendChild(signatures);
   }
 
@@ -281,8 +284,7 @@ export default function ReviewRemarks() {
       const { teacher, principal } = findSignatureInputs(sidebar);
       const handleFile = async (role: "teacherSignature" | "principalSignature", input: HTMLInputElement) => {
         const file = input.files?.[0];
-        if (!file) return;
-        if (!file.type.startsWith("image/")) return;
+        if (!file || !file.type.startsWith("image/")) return;
         const dataUrl = await fileToDataUrl(file);
         const next = { ...reviewRef.current, [role]: dataUrl };
         setReview(next);
