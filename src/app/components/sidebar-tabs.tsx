@@ -129,40 +129,33 @@ function completeStudent(sidebar: HTMLElement): boolean {
 }
 
 function completeMarks(sidebar: HTMLElement): boolean {
-  const panels = findPanels(sidebar, ["Subjects & marks", "Subject"]);
-  const table = panels
-    .flatMap((panel) => Array.from(panel.querySelectorAll<HTMLTableElement>("table")))
-    .find(
-      (candidate) =>
-        /subject/i.test(candidate.textContent || "") &&
-        /obtained/i.test(candidate.textContent || ""),
-    );
+  const panel = findPanel(sidebar, ["Subjects & marks"]);
+  if (!panel) return false;
 
-  if (!table) return false;
+  // The marks editor is a grid of three controlled inputs per subject:
+  // subject name, maximum marks, and obtained marks. It is intentionally
+  // not an HTML table, so validation must follow the editor's real structure.
+  const inputs = Array.from(panel.querySelectorAll<HTMLInputElement>("input"));
+  if (inputs.length < 3 || inputs.length % 3 !== 0) return false;
 
-  const rows = Array.from(table.querySelectorAll<HTMLTableRowElement>("tbody tr"));
-  if (!rows.length) return false;
+  for (let index = 0; index < inputs.length; index += 3) {
+    const subject = inputs[index]?.value.trim() || "";
+    const total = Number(inputs[index + 1]?.value);
+    const obtained = Number(inputs[index + 2]?.value);
 
-  return rows.every((row) => {
-    const inputs = Array.from(row.querySelectorAll<HTMLInputElement>("input"));
-    if (inputs.length < 3) return false;
+    if (
+      !subject ||
+      !Number.isFinite(total) ||
+      total <= 0 ||
+      !Number.isFinite(obtained) ||
+      obtained < 0 ||
+      obtained > total
+    ) {
+      return false;
+    }
+  }
 
-    const subject = inputs[0]?.value.trim() || "";
-    const numberInputs = inputs.filter((input) => input.type === "number");
-    const totalInput = numberInputs[0] || inputs[1];
-    const obtainedInput = numberInputs[1] || inputs[2];
-    const total = Number(totalInput?.value);
-    const obtained = Number(obtainedInput?.value);
-
-    return (
-      !!subject &&
-      Number.isFinite(total) &&
-      total > 0 &&
-      Number.isFinite(obtained) &&
-      obtained >= 0 &&
-      obtained <= total
-    );
-  });
+  return true;
 }
 
 function completeRemarks(sidebar: HTMLElement): boolean {
