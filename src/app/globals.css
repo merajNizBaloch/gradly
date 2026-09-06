@@ -26,6 +26,16 @@ button { cursor: pointer; }
 
 .result-paper { min-height: 1040px; }
 
+/* Keep result tables translucent so the school-logo watermark remains visible underneath. */
+.gradly-paper table,
+.gradly-paper table tbody,
+.gradly-paper table thead,
+.gradly-paper table tr,
+.gradly-paper table th,
+.gradly-paper table td {
+  background-color: transparent !important;
+}
+
 @media (max-width: 640px) {
   .result-paper { min-height: auto; }
 }
