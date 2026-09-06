@@ -6,16 +6,12 @@ import { Download, FileImage, FileText, X } from "lucide-react";
 const EXPORT_BUTTON_TEXT = "Download / Print";
 type ExportFormat = "pdf" | "jpg" | "png";
 
-type Html2Canvas = (element: HTMLElement, options?: Record<string, unknown>) => Promise<HTMLCanvasElement>;
-
-type ExportWindow = Window & {
-  html2canvas?: Html2Canvas;
-  jspdf?: { jsPDF: new (options: Record<string, unknown>) => any };
+type ExportSize = {
+  width: number;
+  height: number;
 };
 
-function dataUrlFromCanvas(canvas: HTMLCanvasElement, type: "image/png" | "image/jpeg") {
-  return canvas.toDataURL(type, type === "image/jpeg" ? 0.95 : undefined);
-}
+type JsPdfConstructor = new (options: Record<string, unknown>) => any;
 
 function triggerDownload(dataUrl: string, filename: string) {
   const anchor = document.createElement("a");
@@ -26,12 +22,17 @@ function triggerDownload(dataUrl: string, filename: string) {
   anchor.remove();
 }
 
+function dataUrlFromCanvas(canvas: HTMLCanvasElement, type: "image/png" | "image/jpeg") {
+  return canvas.toDataURL(type, type === "image/jpeg" ? 0.95 : undefined);
+}
+
 function readScript(url: string) {
   return new Promise<void>((resolve, reject) => {
     const existing = document.querySelector<HTMLScriptElement>(`script[src=\"${url}\"]`);
     if (existing) {
-      if (existing.dataset.loaded === "true") resolve();
-      else {
+      if (existing.dataset.loaded === "true") {
+        resolve();
+      } else {
         existing.addEventListener("load", () => resolve(), { once: true });
         existing.addEventListener("error", () => reject(new Error("Unable to load export library.")), { once: true });
       }
@@ -50,34 +51,19 @@ function readScript(url: string) {
   });
 }
 
-async function loadHtml2Canvas() {
-  await readScript("https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js");
-  const value = (window as ExportWindow).html2canvas;
-  if (!value) throw new Error("Export renderer is unavailable.");
-  return value;
-}
-
 async function loadJsPdf() {
   await readScript("https://cdn.jsdelivr.net/npm/jspdf@2.5.2/dist/jspdf.umd.min.js");
-  const value = (window as ExportWindow).jspdf;
+  const value = (window as Window & { jspdf?: { jsPDF: JsPdfConstructor } }).jspdf;
   if (!value?.jsPDF) throw new Error("PDF exporter is unavailable.");
   return value.jsPDF;
 }
 
-function getPdfSizeMm(source: HTMLElement, canvas: HTMLCanvasElement) {
-  const computed = window.getComputedStyle(source);
-  const cssPxToMm = (value: string) => {
-    const parsed = Number.parseFloat(value);
-    return Number.isFinite(parsed) ? parsed * 25.4 / 96 : 0;
+function getExportSize(source: HTMLElement): ExportSize {
+  const rect = source.getBoundingClientRect();
+  return {
+    width: Math.max(1, Math.round(rect.width)),
+    height: Math.max(1, Math.round(rect.height)),
   };
-
-  const widthMm = computed.width.endsWith("px") ? cssPxToMm(computed.width) : Number.parseFloat(computed.width);
-  const heightMm = computed.height.endsWith("px") ? cssPxToMm(computed.height) : Number.parseFloat(computed.height);
-
-  if (widthMm > 0 && heightMm > 0) return { widthMm, heightMm };
-
-  const ratio = canvas.width / canvas.height;
-  return ratio >= 1 ? { widthMm: 297, heightMm: 210 } : { widthMm: 210, heightMm: 297 };
 }
 
 function copyComputedStyles(source: Element, target: Element) {
@@ -86,15 +72,21 @@ function copyComputedStyles(source: Element, target: Element) {
   const computed = window.getComputedStyle(source);
   for (let index = 0; index < computed.length; index += 1) {
     const property = computed.item(index);
+    // Custom properties can still contain lab()/oklab() tokens. They are not
+    // needed because every normal visual property is copied from computed CSS.
+    if (property.startsWith("--")) continue;
+
     const value = computed.getPropertyValue(property);
-    if (!value) continue;
+    if (!value || /\b(?:lab|oklab|lch|oklch)\(/i.test(value)) continue;
 
     try {
-      target.style.setProperty(property, value, computed.getPropertyPriority(property));
+      target.style.setProperty(property, value);
     } catch {
-      // Ignore browser-specific properties that cannot be assigned inline.
+      // Ignore browser-only declarations that cannot be set inline.
     }
   }
+
+  target.removeAttribute("class");
 
   const sourceChildren = Array.from(source.children);
   const targetChildren = Array.from(target.children);
@@ -104,32 +96,71 @@ function copyComputedStyles(source: Element, target: Element) {
   });
 }
 
-function prepareIsolatedExport(source: HTMLElement) {
-  const host = document.createElement("div");
-  host.setAttribute("aria-hidden", "true");
-  host.style.position = "fixed";
-  host.style.left = "-100000px";
-  host.style.top = "0";
-  host.style.zIndex = "-1";
-  host.style.pointerEvents = "none";
-  host.style.background = "#ffffff";
-  host.style.margin = "0";
-  host.style.padding = "0";
-
+function cloneForExport(source: HTMLElement, size: ExportSize) {
   const clone = source.cloneNode(true) as HTMLElement;
-  clone.querySelectorAll(".no-print").forEach((node) => node.remove());
-
-  host.appendChild(clone);
-  document.body.appendChild(host);
-
-  copyComputedStyles(source, clone);
+  clone.style.width = `${size.width}px`;
+  clone.style.height = `${size.height}px`;
+  clone.style.maxWidth = "none";
+  clone.style.maxHeight = "none";
+  clone.style.margin = "0";
   clone.style.boxShadow = "none";
   clone.style.position = "relative";
-  clone.style.left = "0";
-  clone.style.top = "0";
-  clone.style.margin = "0";
+  clone.removeAttribute("class");
 
-  return { host, clone };
+  clone.querySelectorAll(".no-print").forEach((node) => node.remove());
+  copyComputedStyles(source, clone);
+
+  return clone;
+}
+
+async function renderWithBrowser(source: HTMLElement): Promise<{ canvas: HTMLCanvasElement; size: ExportSize }> {
+  const size = getExportSize(source);
+  const clone = cloneForExport(source, size);
+  const serialized = new XMLSerializer().serializeToString(clone);
+  const svg = `<?xml version="1.0" encoding="UTF-8"?>\n` +
+    `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="${size.width}" height="${size.height}" viewBox="0 0 ${size.width} ${size.height}">` +
+    `<rect width="100%" height="100%" fill="#ffffff"/>` +
+    `<foreignObject x="0" y="0" width="${size.width}" height="${size.height}">` +
+    `<div xmlns="http://www.w3.org/1999/xhtml" style="width:${size.width}px;height:${size.height}px;overflow:hidden;background:#ffffff;">${serialized}</div>` +
+    `</foreignObject></svg>`;
+
+  const blob = new Blob([svg], { type: "image/svg+xml;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+
+  try {
+    const image = new Image();
+    image.decoding = "async";
+
+    await new Promise<void>((resolve, reject) => {
+      image.onload = () => resolve();
+      image.onerror = () => reject(new Error("Unable to render the result card for export."));
+      image.src = url;
+    });
+
+    const scale = Math.min(3, Math.max(2, window.devicePixelRatio || 1));
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.max(1, Math.round(size.width * scale));
+    canvas.height = Math.max(1, Math.round(size.height * scale));
+
+    const context = canvas.getContext("2d");
+    if (!context) throw new Error("Export canvas is unavailable.");
+
+    context.setTransform(scale, 0, 0, scale, 0, 0);
+    context.fillStyle = "#ffffff";
+    context.fillRect(0, 0, size.width, size.height);
+    context.drawImage(image, 0, 0, size.width, size.height);
+
+    return { canvas, size };
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
+
+function pdfSizeFromPixels(size: ExportSize) {
+  const ratio = size.width / size.height;
+  return ratio >= 1
+    ? { widthMm: 297, heightMm: 210 }
+    : { widthMm: 210, heightMm: 297 };
 }
 
 export default function ResultExporter() {
@@ -157,25 +188,11 @@ export default function ResultExporter() {
     setBusy(format);
     setError("");
 
-    let isolated: { host: HTMLElement; clone: HTMLElement } | null = null;
-
     try {
       const source = document.querySelector<HTMLElement>(".gradly-paper");
       if (!source) throw new Error("Result card could not be found.");
 
-      isolated = prepareIsolatedExport(source);
-      const html2canvas = await loadHtml2Canvas();
-
-      const canvas = await html2canvas(isolated.clone, {
-        backgroundColor: "#ffffff",
-        scale: Math.min(3, Math.max(2, window.devicePixelRatio || 1)),
-        useCORS: true,
-        allowTaint: false,
-        imageTimeout: 15000,
-        logging: false,
-        removeContainer: true,
-      });
-
+      const { canvas, size } = await renderWithBrowser(source);
       const filenameBase = `gradly-result-${new Date().toISOString().slice(0, 10)}`;
 
       if (format === "png") {
@@ -191,21 +208,19 @@ export default function ResultExporter() {
       }
 
       const JsPDF = await loadJsPdf();
-      const { widthMm, heightMm } = getPdfSizeMm(source, canvas);
+      const { widthMm, heightMm } = pdfSizeFromPixels(size);
       const pdf = new JsPDF({
         orientation: widthMm > heightMm ? "landscape" : "portrait",
         unit: "mm",
         format: [widthMm, heightMm],
         compress: true,
       });
-      const imageData = dataUrlFromCanvas(canvas, "image/jpeg");
-      pdf.addImage(imageData, "JPEG", 0, 0, widthMm, heightMm, undefined, "FAST");
+      pdf.addImage(dataUrlFromCanvas(canvas, "image/jpeg"), "JPEG", 0, 0, widthMm, heightMm, undefined, "FAST");
       pdf.save(`${filenameBase}.pdf`);
       setOpen(false);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Could not export the result.");
     } finally {
-      isolated?.host.remove();
       setBusy("");
     }
   };
