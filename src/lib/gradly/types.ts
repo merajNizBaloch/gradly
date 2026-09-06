@@ -5,6 +5,12 @@ export type Subject = {
   obtained: number;
 };
 
+export type GradingBand = {
+  grade: string;
+  min: number;
+  label?: string;
+};
+
 export type SchoolProfile = {
   id?: string;
   school_name: string;
@@ -38,5 +44,7 @@ export type ResultDraft = {
   position: number | null;
   remarks: string;
   template: string;
+  theme?: string;
+  grading_scale?: GradingBand[];
   subjects: Subject[];
 };
