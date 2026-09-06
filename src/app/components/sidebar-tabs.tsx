@@ -128,42 +128,44 @@ function completeStudent(sidebar: HTMLElement): boolean {
 }
 
 function completeMarks(sidebar: HTMLElement): boolean {
-  const panels = Array.from(sidebar.children).filter(
-    (node): node is HTMLElement =>
-      node instanceof HTMLElement &&
-      !node.hasAttribute("data-gradly-workflow-header") &&
-      !node.hasAttribute("data-gradly-workflow-navigation"),
-  );
+  const panel = findPanel(sidebar, ["Subjects & marks"]);
+  if (!panel) return false;
 
-  const table = panels
-    .flatMap((panel) => Array.from(panel.querySelectorAll<HTMLTableElement>("table")))
-    .find((candidate) => /subject/i.test(candidate.textContent || "") && /obtained/i.test(candidate.textContent || ""));
+  const inputs = Array.from(panel.querySelectorAll<HTMLInputElement>("input"));
+  if (!inputs.length || inputs.length % 3 !== 0) return false;
 
-  if (!table) return false;
+  for (let index = 0; index < inputs.length; index += 3) {
+    const subjectInput = inputs[index];
+    const totalInput = inputs[index + 1];
+    const obtainedInput = inputs[index + 2];
 
-  const rows = Array.from(table.querySelectorAll<HTMLTableRowElement>("tbody tr"));
-  if (!rows.length) return false;
+    if (
+      !subjectInput ||
+      !totalInput ||
+      !obtainedInput ||
+      totalInput.type !== "number" ||
+      obtainedInput.type !== "number"
+    ) {
+      return false;
+    }
 
-  return rows.every((row) => {
-    const inputs = Array.from(row.querySelectorAll<HTMLInputElement>("input"));
-    if (inputs.length < 3) return false;
+    const subject = subjectInput.value.trim();
+    const total = Number(totalInput.value);
+    const obtained = Number(obtainedInput.value);
 
-    const subject = inputs[0]?.value.trim() || "";
-    const numberInputs = inputs.filter((input) => input.type === "number");
-    const totalInput = numberInputs[0] || inputs[1];
-    const obtainedInput = numberInputs[1] || inputs[2];
-    const total = Number(totalInput?.value);
-    const obtained = Number(obtainedInput?.value);
+    if (
+      !subject ||
+      !Number.isFinite(total) ||
+      total <= 0 ||
+      !Number.isFinite(obtained) ||
+      obtained < 0 ||
+      obtained > total
+    ) {
+      return false;
+    }
+  }
 
-    return (
-      !!subject &&
-      Number.isFinite(total) &&
-      total > 0 &&
-      Number.isFinite(obtained) &&
-      obtained >= 0 &&
-      obtained <= total
-    );
-  });
+  return true;
 }
 
 function completeRemarks(sidebar: HTMLElement): boolean {
