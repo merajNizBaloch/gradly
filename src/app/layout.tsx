@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 import "./globals.css";
 import SiteFooter from "./components/site-footer";
 import SidebarTabs from "./components/sidebar-tabs";
@@ -18,15 +19,17 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
   return (
     <html lang="en">
       <body>
-        {children}
-        <CompactDesignControl />
-        <SchoolLogoSync />
-        <ResultCardStyles />
-        <SidebarTabs />
-        <ResultPreviewFix />
-        <OverlayZoom />
-        <ResultDownload />
-        <SiteFooter />
+        <Suspense fallback={null}>
+          {children}
+          <CompactDesignControl />
+          <SchoolLogoSync />
+          <ResultCardStyles />
+          <SidebarTabs />
+          <ResultPreviewFix />
+          <OverlayZoom />
+          <ResultDownload />
+          <SiteFooter />
+        </Suspense>
       </body>
     </html>
   );
