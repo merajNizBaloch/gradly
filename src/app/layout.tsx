@@ -7,6 +7,7 @@ import OverlayZoom from "./components/overlay-zoom";
 import CompactDesignControl from "./components/compact-design-control";
 import ResultDownload from "./components/result-download";
 import SchoolLogoSync from "./components/school-logo-sync";
+import ResultCardStyles from "./components/result-card-styles";
 
 export const metadata: Metadata = {
   title: "Gradly — Student Result Generator",
@@ -20,6 +21,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
         {children}
         <CompactDesignControl />
         <SchoolLogoSync />
+        <ResultCardStyles />
         <SidebarTabs />
         <ResultPreviewFix />
         <OverlayZoom />
