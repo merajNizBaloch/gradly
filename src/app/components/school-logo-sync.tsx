@@ -10,8 +10,11 @@ const STORAGE_KEY = "gradly-school-profile";
 const DIALOG_SELECTOR = "[role='dialog'][aria-labelledby='gradly-school-dialog-title']";
 
 function getSchoolLogoInput() {
-  const sidebar = document.querySelector<HTMLElement>("section.no-print.space-y-4");
-  return sidebar?.querySelector<HTMLInputElement>('input[type="file"][accept="image/*"]') ?? null;
+  const legacySidebar = document.querySelector<HTMLElement>("section.no-print.space-y-4");
+  const legacyInput = legacySidebar?.querySelector<HTMLInputElement>('input[type="file"][accept="image/*"]');
+  if (legacyInput) return legacyInput;
+
+  return document.querySelector<HTMLInputElement>('main input[type="file"][accept="image/*"]');
 }
 
 async function dataUrlToFile(dataUrl: string) {
