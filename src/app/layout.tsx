@@ -5,7 +5,7 @@ import SiteFooter from "./components/site-footer";
 import ResultDownload from "./components/result-download";
 import SchoolLogoSync from "./components/school-logo-sync";
 import ResultCardStyles from "./components/result-card-styles";
-import WorkspaceSettingsOverlay from "./components/workspace-settings-overlay";
+import LegacyGlobalSettings from "./components/legacy-global-settings";
 import WorkspaceGlobalPersistence from "./components/workspace-global-persistence";
 
 export const metadata: Metadata = {
@@ -20,7 +20,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
         <Suspense fallback={null}>
           {children}
           <SchoolLogoSync />
-          <WorkspaceSettingsOverlay />
+          <LegacyGlobalSettings />
           <WorkspaceGlobalPersistence />
           <ResultCardStyles />
           <ResultDownload />
