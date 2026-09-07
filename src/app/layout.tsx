@@ -6,6 +6,7 @@ import ResultPreviewFix from "./components/result-preview-fix";
 import OverlayZoom from "./components/overlay-zoom";
 import CompactDesignControl from "./components/compact-design-control";
 import ResultDownload from "./components/result-download";
+import SchoolLogoSync from "./components/school-logo-sync";
 
 export const metadata: Metadata = {
   title: "Gradly — Student Result Generator",
@@ -18,6 +19,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
       <body>
         {children}
         <CompactDesignControl />
+        <SchoolLogoSync />
         <SidebarTabs />
         <ResultPreviewFix />
         <OverlayZoom />
