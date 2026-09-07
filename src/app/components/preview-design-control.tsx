@@ -1,8 +1,8 @@
 "use client";
 
-import { Check, ChevronDown, LayoutTemplate, Palette, Sparkles, X } from "lucide-react";
+import { Check, ChevronDown, LayoutTemplate, Palette } from "lucide-react";
 import { createPortal } from "react-dom";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 type PaperName = "A4" | "A5" | "Letter" | "Legal" | "Custom";
 type Theme = { name: string; ink: string; wash: string; accent: string };
@@ -97,11 +97,16 @@ function applyDesign(state: DesignState, returnTo?: string) {
           const inputs = custom ? Array.from(custom.querySelectorAll<HTMLInputElement>('input[type="number"]')) : [];
           if (inputs[0] && state.customWidth) setNativeValue(inputs[0], state.customWidth);
           if (inputs[1] && state.customHeight) setNativeValue(inputs[1], state.customHeight);
-        }, 40);
+        }, 30);
       }
-      window.setTimeout(() => workflowButton(backTo)?.click(), state.paper === "Custom" ? 110 : 50);
-    }, 50);
-  }, 40);
+      window.setTimeout(() => workflowButton(backTo)?.click(), state.paper === "Custom" ? 90 : 35);
+    }, 35);
+  }, 30);
+}
+
+function saveAndApply(state: DesignState) {
+  try { localStorage.setItem(DESIGN_KEY, JSON.stringify(state)); } catch {}
+  applyDesign(state, visibleStepLabel());
 }
 
 function findPreviewHeader(): HTMLElement | null {
@@ -114,6 +119,7 @@ export default function PreviewDesignControl() {
   const [host, setHost] = useState<HTMLElement | null>(null);
   const [open, setOpen] = useState(false);
   const [design, setDesign] = useState<DesignState>({ template: "Academic", palette: "Navy", paper: "A4" });
+  const rootRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const saved = loadDesign();
@@ -126,16 +132,14 @@ export default function PreviewDesignControl() {
         if (!mount) {
           mount = document.createElement("div");
           mount.dataset.gradlyPreviewDesign = "true";
-          mount.className = "ml-auto flex items-center";
+          mount.className = "relative ml-auto flex items-center";
           preview.appendChild(mount);
         }
         setHost(mount);
       }
 
       document.querySelectorAll<HTMLButtonElement>("button").forEach((button) => {
-        if ((button.textContent || "").trim() === "Design" && !button.closest("[data-gradly-preview-design]")) {
-          button.style.display = "none";
-        }
+        if ((button.textContent || "").trim() === "Design" && !button.closest("[data-gradly-preview-design]")) button.style.display = "none";
       });
       applyDesign(saved, currentStep);
     }, 220);
@@ -146,130 +150,143 @@ export default function PreviewDesignControl() {
     };
   }, []);
 
+  useEffect(() => {
+    if (!open) return;
+    const close = (event: MouseEvent) => {
+      if (!rootRef.current?.contains(event.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", close);
+    return () => document.removeEventListener("mousedown", close);
+  }, [open]);
+
   const activeTemplate = useMemo(() => designs.find((item) => item.name === design.template) || designs[0], [design.template]);
   const activeTheme = activeTemplate.themes.find((theme) => theme.name === design.palette) || activeTemplate.themes[0];
 
-  const save = () => {
-    try { localStorage.setItem(DESIGN_KEY, JSON.stringify(design)); } catch {}
-    const backTo = visibleStepLabel();
-    setOpen(false);
-    applyDesign(design, backTo);
+  const updateLive = (next: DesignState) => {
+    setDesign(next);
+    saveAndApply(next);
   };
 
-  const button = host ? createPortal(
-    <button
-      type="button"
-      onClick={() => { setDesign(loadDesign()); setOpen(true); }}
-      className="group flex items-center gap-2.5 rounded-xl border border-[#d8dde4] bg-white px-3 py-2 shadow-sm transition hover:-translate-y-0.5 hover:border-[#17365D]/25 hover:shadow-md"
-      title="Change result card design"
-    >
-      <span className="grid h-8 w-8 place-items-center rounded-lg bg-[#17365D] text-white shadow-sm"><LayoutTemplate size={15} /></span>
-      <span className="hidden text-left sm:block">
-        <span className="block text-[9px] font-black uppercase tracking-[.15em] text-slate-400">Design</span>
-        <span className="mt-0.5 block text-[11px] font-black text-slate-700">{design.template} · {design.palette}</span>
-      </span>
-      <ChevronDown size={13} className="text-slate-400" />
-    </button>,
-    host,
-  ) : null;
+  const control = host ? createPortal(
+    <div ref={rootRef} className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((value) => !value)}
+        className="group flex items-center gap-2.5 rounded-xl border border-[#d8dde4] bg-white px-3 py-2 shadow-sm transition hover:border-[#17365D]/30 hover:shadow-md"
+        title="Change result card design"
+      >
+        <span className="grid h-8 w-8 place-items-center rounded-lg bg-[#17365D] text-white"><LayoutTemplate size={15} /></span>
+        <span className="hidden text-left sm:block">
+          <span className="block text-[9px] font-black uppercase tracking-[.15em] text-slate-400">Design</span>
+          <span className="mt-0.5 block text-[11px] font-black text-slate-700">{design.template} · {design.palette}</span>
+        </span>
+        <ChevronDown size={13} className={`text-slate-400 transition ${open ? "rotate-180" : ""}`} />
+      </button>
 
-  return (
-    <>
-      {button}
       {open && (
-        <div className="no-print fixed inset-0 z-[170] flex items-center justify-center bg-[#0d2036]/60 p-3 backdrop-blur-sm" onMouseDown={(event) => { if (event.target === event.currentTarget) setOpen(false); }}>
-          <div className="flex max-h-[94vh] w-full max-w-5xl flex-col overflow-hidden rounded-[28px] border border-white/50 bg-[#fffdfa] shadow-[0_40px_120px_rgba(10,29,50,.34)]">
-            <div className="flex items-center justify-between border-b border-[#e4dfd6] bg-white px-5 py-4 sm:px-6">
-              <div className="flex items-center gap-3">
-                <span className="grid h-10 w-10 place-items-center rounded-xl bg-[#17365D] text-white"><Sparkles size={17} /></span>
+        <div className="absolute right-0 top-[calc(100%+10px)] z-[150] w-[min(92vw,430px)] overflow-hidden rounded-2xl border border-[#ded9d0] bg-[#fffdfa] shadow-[0_24px_70px_rgba(15,34,57,.22)]">
+          <div className="border-b border-[#e5e0d7] bg-white px-4 py-3">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="text-[9px] font-black uppercase tracking-[.17em] text-[#9b753b]">Live design</p>
+                <p className="mt-0.5 text-sm font-black text-[#14243a]">Update the result card instantly</p>
+              </div>
+              <span className="rounded-full bg-[#f4f7fa] px-2.5 py-1 text-[9px] font-black text-[#17365D]">{design.paper}</span>
+            </div>
+          </div>
+
+          <div className="max-h-[68vh] overflow-auto p-4">
+            <div>
+              <p className="mb-2 text-[9px] font-black uppercase tracking-[.15em] text-slate-400">Layout</p>
+              <div className="grid grid-cols-5 gap-2">
+                {designs.map((item) => {
+                  const selected = design.template === item.name;
+                  const theme = item.themes[0];
+                  return (
+                    <button
+                      key={item.name}
+                      type="button"
+                      title={item.description}
+                      onClick={() => updateLive({ ...design, template: item.name, palette: item.themes[0].name })}
+                      className={`rounded-xl border p-2 text-center transition ${selected ? "border-[#17365D] bg-[#f4f7fa] shadow-sm" : "border-[#e1ddd5] bg-white hover:border-slate-300"}`}
+                    >
+                      <span className="mx-auto block h-7 w-7 rounded-md border" style={{ borderColor: theme.ink, backgroundColor: theme.wash }} />
+                      <span className={`mt-1.5 block truncate text-[9px] font-black ${selected ? "text-[#17365D]" : "text-slate-500"}`}>{item.name}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="mt-4 rounded-xl border border-[#e1ddd5] bg-white p-3">
+              <div className="mb-2 flex items-center gap-2"><Palette size={13} className="text-[#9b753b]" /><p className="text-[10px] font-black text-slate-700">Palette</p></div>
+              <div className="flex flex-wrap gap-2">
+                {activeTemplate.themes.map((theme) => (
+                  <button
+                    key={theme.name}
+                    type="button"
+                    onClick={() => updateLive({ ...design, palette: theme.name })}
+                    className={`flex items-center gap-2 rounded-full border px-2.5 py-1.5 text-[9px] font-black transition ${design.palette === theme.name ? "border-[#17365D] bg-[#f4f7fa] text-[#17365D]" : "border-[#e1ddd5] bg-white text-slate-500"}`}
+                  >
+                    <span className="h-3 w-3 rounded-full" style={{ backgroundColor: theme.ink }} />
+                    {theme.name}
+                    {design.palette === theme.name && <Check size={10} />}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="mt-4 rounded-xl border border-[#e1ddd5] bg-[#faf7f1] p-3">
+              <p className="mb-2 text-[10px] font-black text-slate-700">Paper size</p>
+              <div className="grid grid-cols-5 gap-1.5">
+                {(["A4", "A5", "Letter", "Legal", "Custom"] as PaperName[]).map((paper) => (
+                  <button
+                    key={paper}
+                    type="button"
+                    onClick={() => updateLive({ ...design, paper })}
+                    className={`rounded-lg border px-2 py-2 text-[9px] font-black transition ${design.paper === paper ? "border-[#17365D] bg-[#17365D] text-white" : "border-[#ded9d0] bg-white text-slate-500"}`}
+                  >
+                    {paper}
+                  </button>
+                ))}
+              </div>
+
+              {design.paper === "Custom" && (
+                <div className="mt-2 grid grid-cols-2 gap-2">
+                  <input
+                    type="number"
+                    value={design.customWidth || "210"}
+                    onChange={(event) => updateLive({ ...design, customWidth: event.target.value })}
+                    className="rounded-lg border border-[#ded9d0] bg-white px-2.5 py-2 text-xs outline-none focus:border-[#17365D]"
+                    placeholder="Width mm"
+                  />
+                  <input
+                    type="number"
+                    value={design.customHeight || "297"}
+                    onChange={(event) => updateLive({ ...design, customHeight: event.target.value })}
+                    className="rounded-lg border border-[#ded9d0] bg-white px-2.5 py-2 text-xs outline-none focus:border-[#17365D]"
+                    placeholder="Height mm"
+                  />
+                </div>
+              )}
+            </div>
+
+            <div className="mt-4 flex items-center justify-between rounded-xl border border-[#e1ddd5] bg-white px-3 py-2.5">
+              <div className="flex items-center gap-2">
+                <span className="h-5 w-5 rounded-md border" style={{ borderColor: activeTheme.ink, backgroundColor: activeTheme.wash }} />
                 <div>
-                  <p className="text-[9px] font-black uppercase tracking-[.2em] text-[#a07b3f]">Result appearance</p>
-                  <h2 className="mt-0.5 font-serif text-xl font-bold text-[#14243a]">Choose your academic style</h2>
+                  <p className="text-[9px] font-black text-slate-700">{design.template} · {design.palette}</p>
+                  <p className="text-[8px] text-slate-400">Saved automatically for the next result</p>
                 </div>
               </div>
-              <button onClick={() => setOpen(false)} className="grid h-9 w-9 place-items-center rounded-xl border border-[#e1ddd5] bg-white text-slate-500 transition hover:bg-slate-50" aria-label="Close design panel"><X size={16} /></button>
-            </div>
-
-            <div className="grid min-h-0 flex-1 overflow-auto lg:grid-cols-[1.2fr_.8fr]">
-              <div className="overflow-auto p-5 sm:p-6">
-                <div className="mb-4 flex items-end justify-between gap-4">
-                  <div>
-                    <p className="text-[9px] font-black uppercase tracking-[.16em] text-slate-400">Layout collection</p>
-                    <p className="mt-1 text-sm font-bold text-slate-700">Five distinct report-card structures</p>
-                  </div>
-                  <span className="rounded-full border border-[#ded8cc] bg-[#f8f4ec] px-2.5 py-1 text-[9px] font-black text-[#8c6a35]">5 layouts · 20 palettes</span>
-                </div>
-
-                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-                  {designs.map((item) => {
-                    const selected = design.template === item.name;
-                    const theme = item.themes[0];
-                    return (
-                      <button
-                        key={item.name}
-                        type="button"
-                        onClick={() => setDesign((current) => ({ ...current, template: item.name, palette: item.themes[0].name }))}
-                        className={`group overflow-hidden rounded-2xl border text-left transition ${selected ? "border-[#17365D] bg-white shadow-[0_12px_28px_rgba(23,54,93,.12)] ring-1 ring-[#17365D]/10" : "border-[#e2ddd5] bg-white hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-md"}`}
-                      >
-                        <div className="h-28 p-2.5" style={{ backgroundColor: theme.wash }}>
-                          <div className="h-full overflow-hidden rounded-lg border bg-white p-2 shadow-sm" style={{ borderColor: theme.ink }}>
-                            <div className="flex items-center gap-2 border-b-2 pb-2" style={{ borderColor: theme.ink }}>
-                              <span className="h-5 w-5 rounded-full" style={{ backgroundColor: theme.accent }} />
-                              <div className="flex-1"><div className="h-1.5 w-16 rounded" style={{ backgroundColor: theme.ink }} /><div className="mt-1 h-1 w-10 rounded bg-slate-200" /></div>
-                            </div>
-                            <div className="mt-2 space-y-1.5">{[1,2,3,4].map((row) => <div key={row} className="flex gap-1"><span className="h-1 flex-1 rounded bg-slate-200" /><span className="h-1 w-6 rounded" style={{ backgroundColor: theme.wash }} /></div>)}</div>
-                          </div>
-                        </div>
-                        <div className="flex items-start justify-between gap-2 p-3">
-                          <div><p className="text-xs font-black text-slate-700">{item.name}</p><p className="mt-1 text-[9px] leading-4 text-slate-400">{item.description}</p></div>
-                          {selected && <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-[#17365D] text-white"><Check size={12} /></span>}
-                        </div>
-                      </button>
-                    );
-                  })}
-                </div>
-
-                <div className="mt-5 rounded-2xl border border-[#ded9d0] bg-white p-4">
-                  <div className="mb-3 flex items-center gap-2"><Palette size={14} className="text-[#a07b3f]" /><p className="text-xs font-black text-slate-700">Color system</p></div>
-                  <div className="flex flex-wrap gap-2">
-                    {activeTemplate.themes.map((theme) => (
-                      <button key={theme.name} type="button" onClick={() => setDesign((current) => ({ ...current, palette: theme.name }))} className={`flex items-center gap-2 rounded-full border px-3 py-2 text-[10px] font-black transition ${design.palette === theme.name ? "border-[#17365D] bg-[#f4f7fa] text-[#17365D]" : "border-[#e1ddd5] bg-white text-slate-500 hover:border-slate-300"}`}>
-                        <span className="h-3.5 w-3.5 rounded-full shadow-sm" style={{ backgroundColor: theme.ink }} />{theme.name}{design.palette === theme.name && <Check size={12} />}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="mt-4 rounded-2xl border border-[#ded9d0] bg-[#faf7f1] p-4">
-                  <p className="mb-3 text-xs font-black text-slate-700">Paper format</p>
-                  <div className="grid grid-cols-3 gap-2 sm:grid-cols-5">{(["A4","A5","Letter","Legal","Custom"] as PaperName[]).map((paper) => <button key={paper} type="button" onClick={() => setDesign((current) => ({ ...current, paper }))} className={`rounded-xl border px-3 py-2.5 text-xs font-black transition ${design.paper === paper ? "border-[#17365D] bg-[#17365D] text-white" : "border-[#ded9d0] bg-white text-slate-500 hover:border-slate-300"}`}>{paper}</button>)}</div>
-                  {design.paper === "Custom" && <div className="mt-3 grid grid-cols-2 gap-3"><input type="number" value={design.customWidth || "210"} onChange={(e) => setDesign((current) => ({ ...current, customWidth: e.target.value }))} className="rounded-xl border border-[#ded9d0] bg-white px-3 py-2.5 text-sm outline-none focus:border-[#17365D]" placeholder="Width mm" /><input type="number" value={design.customHeight || "297"} onChange={(e) => setDesign((current) => ({ ...current, customHeight: e.target.value }))} className="rounded-xl border border-[#ded9d0] bg-white px-3 py-2.5 text-sm outline-none focus:border-[#17365D]" placeholder="Height mm" /></div>}
-                </div>
-              </div>
-
-              <div className="border-t border-[#e3ded5] bg-[#f2f4f6] p-5 lg:border-l lg:border-t-0 sm:p-6">
-                <div className="sticky top-0">
-                  <div className="mb-3 flex items-center justify-between"><div><p className="text-[9px] font-black uppercase tracking-[.16em] text-slate-400">Style preview</p><p className="mt-1 text-sm font-black text-slate-700">{design.template} · {design.palette}</p></div><span className="rounded-full bg-white px-2.5 py-1 text-[9px] font-black text-[#17365D] shadow-sm">{design.paper}</span></div>
-                  <div className="rounded-[22px] bg-[#dfe4e9] p-5 shadow-inner">
-                    <div className="mx-auto overflow-hidden rounded-md border-[5px] bg-white p-5 shadow-[0_18px_45px_rgba(20,36,58,.18)]" style={{ borderColor: activeTheme.ink }}>
-                      <div className="flex items-center gap-3 border-b-2 pb-3" style={{ borderColor: activeTheme.ink }}><span className="h-11 w-11 rounded-full" style={{ backgroundColor: activeTheme.wash, border: `1px solid ${activeTheme.accent}` }} /><div className="flex-1"><div className="h-2 w-28 rounded" style={{ backgroundColor: activeTheme.ink }} /><div className="mt-2 h-1.5 w-20 rounded bg-slate-200" /></div></div>
-                      <div className="mt-5 grid grid-cols-2 gap-2"><div className="h-7 rounded" style={{ backgroundColor: activeTheme.wash }} /><div className="h-7 rounded" style={{ backgroundColor: activeTheme.wash }} /></div>
-                      <div className="mt-4 space-y-2">{[1,2,3,4,5].map((row) => <div key={row} className="flex gap-2"><span className="h-2 flex-1 rounded bg-slate-200" /><span className="h-2 w-10 rounded" style={{ backgroundColor: activeTheme.wash }} /></div>)}</div>
-                      <div className="mt-5 grid grid-cols-3 gap-1 border-y py-3" style={{ borderColor: activeTheme.ink }}><span className="h-7 rounded" style={{ backgroundColor: activeTheme.wash }} /><span className="h-7 rounded" style={{ backgroundColor: activeTheme.wash }} /><span className="h-7 rounded" style={{ backgroundColor: activeTheme.wash }} /></div>
-                    </div>
-                  </div>
-                  <p className="mt-3 text-center text-[10px] leading-5 text-slate-400">Preview shows the visual system. Your actual result card updates when you apply.</p>
-                </div>
-              </div>
-            </div>
-
-            <div className="flex items-center justify-between gap-3 border-t border-[#e3ded5] bg-white px-5 py-4 sm:px-6">
-              <p className="hidden text-[10px] text-slate-400 sm:block">Design is saved for future result cards.</p>
-              <div className="ml-auto flex gap-2"><button onClick={() => setOpen(false)} className="rounded-xl border border-[#d9d4cb] bg-white px-4 py-2.5 text-sm font-bold text-slate-500">Cancel</button><button onClick={save} className="rounded-xl bg-[#17365D] px-5 py-2.5 text-sm font-black text-white shadow-sm transition hover:bg-[#102d50]">Apply design</button></div>
+              <span className="text-[9px] font-black text-emerald-600">LIVE</span>
             </div>
           </div>
         </div>
       )}
-    </>
-  );
+    </div>,
+    host,
+  ) : null;
+
+  return control;
 }
