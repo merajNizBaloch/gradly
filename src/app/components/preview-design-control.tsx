@@ -52,20 +52,12 @@ function loadDesign(): DesignState {
   }
 }
 
-function workflowButton(label: string) {
-  const nav = document.querySelector<HTMLElement>("aside.no-print nav");
-  return nav ? Array.from(nav.querySelectorAll<HTMLButtonElement>("button")).find((button) => (button.textContent || "").includes(label)) ?? null : null;
-}
-
-function visibleStepLabel() {
-  const title = document.querySelector<HTMLElement>("section.no-print h1")?.textContent?.trim();
-  return title === "Marks" || title === "Finalize" ? title : "Student";
-}
-
 function designPanel() {
   const editor = document.querySelector<HTMLElement>("section.no-print.gradly-workspace-scroll");
   if (!editor) return null;
-  return Array.from(editor.querySelectorAll<HTMLElement>(":scope > div:nth-child(2) > div")).find((node) => node.textContent?.includes("Result card design")) ?? null;
+  return Array.from(editor.querySelectorAll<HTMLElement>(":scope > div:nth-child(2) > div")).find((node) =>
+    node.textContent?.includes("Result card design"),
+  ) ?? null;
 }
 
 function setNativeValue(input: HTMLInputElement, value: string) {
@@ -75,38 +67,52 @@ function setNativeValue(input: HTMLInputElement, value: string) {
   input.dispatchEvent(new Event("change", { bubbles: true }));
 }
 
-function applyDesign(state: DesignState, returnTo?: string) {
-  const backTo = returnTo || visibleStepLabel();
-  workflowButton("Design")?.click();
+function animateCard() {
+  const card = document.querySelector<HTMLElement>(".gradly-paper");
+  if (!card || typeof card.animate !== "function") return;
+  card.getAnimations().forEach((animation) => animation.cancel());
+  card.animate(
+    [
+      { opacity: 0.82, transform: "scale(.992) translateY(2px)" },
+      { opacity: 1, transform: "scale(1) translateY(0)" },
+    ],
+    { duration: 240, easing: "cubic-bezier(.22,1,.36,1)" },
+  );
+}
+
+function applyDesign(state: DesignState) {
+  let panel = designPanel();
+  if (!panel) return;
+
+  const templateButton = Array.from(panel.querySelectorAll<HTMLButtonElement>("button")).find((button) =>
+    button.textContent?.includes(state.template),
+  );
+  templateButton?.click();
 
   window.setTimeout(() => {
-    let panel = designPanel();
+    panel = designPanel();
     if (!panel) return;
     const buttons = Array.from(panel.querySelectorAll<HTMLButtonElement>("button"));
-    buttons.find((button) => button.textContent?.includes(state.template))?.click();
+    buttons.find((button) => (button.textContent || "").trim() === state.palette)?.click();
+    buttons.find((button) => (button.textContent || "").trim() === state.paper)?.click();
 
-    window.setTimeout(() => {
-      panel = designPanel();
-      if (!panel) return;
-      const refreshed = Array.from(panel.querySelectorAll<HTMLButtonElement>("button"));
-      refreshed.find((button) => (button.textContent || "").trim() === state.palette)?.click();
-      refreshed.find((button) => (button.textContent || "").trim() === state.paper)?.click();
-      if (state.paper === "Custom") {
-        window.setTimeout(() => {
-          const custom = designPanel();
-          const inputs = custom ? Array.from(custom.querySelectorAll<HTMLInputElement>('input[type="number"]')) : [];
-          if (inputs[0] && state.customWidth) setNativeValue(inputs[0], state.customWidth);
-          if (inputs[1] && state.customHeight) setNativeValue(inputs[1], state.customHeight);
-        }, 30);
-      }
-      window.setTimeout(() => workflowButton(backTo)?.click(), state.paper === "Custom" ? 90 : 35);
-    }, 35);
-  }, 30);
+    if (state.paper === "Custom") {
+      window.setTimeout(() => {
+        const current = designPanel();
+        const inputs = current ? Array.from(current.querySelectorAll<HTMLInputElement>('input[type="number"]')) : [];
+        if (inputs[0] && state.customWidth) setNativeValue(inputs[0], state.customWidth);
+        if (inputs[1] && state.customHeight) setNativeValue(inputs[1], state.customHeight);
+        animateCard();
+      }, 35);
+    } else {
+      animateCard();
+    }
+  }, 35);
 }
 
 function saveAndApply(state: DesignState) {
   try { localStorage.setItem(DESIGN_KEY, JSON.stringify(state)); } catch {}
-  applyDesign(state, visibleStepLabel());
+  applyDesign(state);
 }
 
 function findPreviewHeader(): HTMLElement | null {
@@ -124,7 +130,6 @@ export default function PreviewDesignControl() {
   useEffect(() => {
     const saved = loadDesign();
     setDesign(saved);
-    const currentStep = visibleStepLabel();
     const timer = window.setTimeout(() => {
       const preview = findPreviewHeader();
       if (preview) {
@@ -139,9 +144,12 @@ export default function PreviewDesignControl() {
       }
 
       document.querySelectorAll<HTMLButtonElement>("button").forEach((button) => {
-        if ((button.textContent || "").trim() === "Design" && !button.closest("[data-gradly-preview-design]")) button.style.display = "none";
+        if ((button.textContent || "").trim() === "Design" && !button.closest("[data-gradly-preview-design]")) {
+          button.style.display = "none";
+        }
       });
-      applyDesign(saved, currentStep);
+
+      applyDesign(saved);
     }, 220);
 
     return () => {
@@ -159,7 +167,10 @@ export default function PreviewDesignControl() {
     return () => document.removeEventListener("mousedown", close);
   }, [open]);
 
-  const activeTemplate = useMemo(() => designs.find((item) => item.name === design.template) || designs[0], [design.template]);
+  const activeTemplate = useMemo(
+    () => designs.find((item) => item.name === design.template) || designs[0],
+    [design.template],
+  );
   const activeTheme = activeTemplate.themes.find((theme) => theme.name === design.palette) || activeTemplate.themes[0];
 
   const updateLive = (next: DesignState) => {
@@ -189,7 +200,7 @@ export default function PreviewDesignControl() {
             <div className="flex items-center justify-between gap-3">
               <div>
                 <p className="text-[9px] font-black uppercase tracking-[.17em] text-[#9b753b]">Live design</p>
-                <p className="mt-0.5 text-sm font-black text-[#14243a]">Update the result card instantly</p>
+                <p className="mt-0.5 text-sm font-black text-[#14243a]">See every change on the card</p>
               </div>
               <span className="rounded-full bg-[#f4f7fa] px-2.5 py-1 text-[9px] font-black text-[#17365D]">{design.paper}</span>
             </div>
@@ -276,7 +287,7 @@ export default function PreviewDesignControl() {
                 <span className="h-5 w-5 rounded-md border" style={{ borderColor: activeTheme.ink, backgroundColor: activeTheme.wash }} />
                 <div>
                   <p className="text-[9px] font-black text-slate-700">{design.template} · {design.palette}</p>
-                  <p className="text-[8px] text-slate-400">Saved automatically for the next result</p>
+                  <p className="text-[8px] text-slate-400">Saved automatically</p>
                 </div>
               </div>
               <span className="text-[9px] font-black text-emerald-600">LIVE</span>
