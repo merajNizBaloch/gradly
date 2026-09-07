@@ -1,5 +1,6 @@
 "use client";
 
+import { School } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
@@ -17,12 +18,26 @@ export default function EditResultPage({ params }: { params: Promise<{ reportId:
         if (!response.ok) throw new Error(data.error || "Result not found");
         if (!active) return;
         router.replace(`/?edit=${encodeURIComponent(reportId)}`);
-      } catch (e) {
-        if (active) setError(e instanceof Error ? e.message : "Unable to load result");
+      } catch (value) {
+        if (active) setError(value instanceof Error ? value.message : "Unable to load result");
       }
     })();
-    return () => { active = false; };
+    return () => {
+      active = false;
+    };
   }, [params, router]);
 
-  return <main className="grid min-h-screen place-items-center bg-[#f6f7fb] p-6 text-[#101828]"><div className="w-full max-w-md rounded-2xl border border-gray-200 bg-white p-8 text-center shadow-sm"><div className="mx-auto mb-4 grid h-12 w-12 place-items-center rounded-xl bg-[#101828] text-white font-black">G</div><h1 className="text-xl font-bold">Opening Gradly Studio</h1><p className="mt-2 text-sm text-gray-500">Loading the saved report directly into the editor…</p>{error&&<p className="mt-4 rounded-lg bg-red-50 p-3 text-sm font-medium text-red-700">{error}</p>}</div></main>;
+  return (
+    <main className="grid min-h-screen place-items-center bg-[#f4f2ed] p-6 text-[#14243a]">
+      <div className="w-full max-w-md rounded-[28px] border border-[#d9d5cc] bg-[#fffdfa] p-8 text-center shadow-[0_24px_80px_rgba(20,36,58,.12)]">
+        <div className="mx-auto mb-5 grid h-14 w-14 place-items-center rounded-2xl bg-[#17365D] text-white shadow-lg">
+          <School size={24} />
+        </div>
+        <p className="text-[9px] font-black uppercase tracking-[.2em] text-[#a07b3f]">Gradly Academic Studio</p>
+        <h1 className="mt-2 font-serif text-2xl font-bold">Opening saved result</h1>
+        <p className="mt-2 text-sm leading-6 text-slate-500">Loading the academic record directly into the editor…</p>
+        {error && <p className="mt-5 rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm font-semibold text-rose-700">{error}</p>}
+      </div>
+    </main>
+  );
 }
