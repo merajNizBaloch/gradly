@@ -169,6 +169,12 @@ function concatBytes(...parts: Uint8Array[]) {
   return output;
 }
 
+function bytesToArrayBuffer(bytes: Uint8Array): ArrayBuffer {
+  const buffer = new ArrayBuffer(bytes.byteLength);
+  new Uint8Array(buffer).set(bytes);
+  return buffer;
+}
+
 function asciiBytes(value: string) {
   return new TextEncoder().encode(value);
 }
@@ -201,7 +207,7 @@ async function createPdfBlob(canvas: HTMLCanvasElement, pixelRatio: number) {
     xref += `${String(offsets[index]).padStart(10, "0")} 00000 n \n`;
   }
   const trailer = asciiBytes(`${xref}trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xrefOffset}\n%%EOF\n`);
-  return new Blob([...chunks, trailer], { type: "application/pdf" });
+  return new Blob([...chunks, trailer].map(bytesToArrayBuffer), { type: "application/pdf" });
 }
 
 async function exportResult(format: Format) {
