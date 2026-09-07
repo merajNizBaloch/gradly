@@ -5,8 +5,6 @@ import SiteFooter from "./components/site-footer";
 import ResultDownload from "./components/result-download";
 import SchoolLogoSync from "./components/school-logo-sync";
 import ResultCardStyles from "./components/result-card-styles";
-import LegacyGlobalSettings from "./components/legacy-global-settings";
-import WorkspaceGlobalPersistence from "./components/workspace-global-persistence";
 
 export const metadata: Metadata = {
   title: "Gradly — Academic Result Studio",
@@ -20,8 +18,6 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
         <Suspense fallback={null}>
           {children}
           <SchoolLogoSync />
-          <LegacyGlobalSettings />
-          <WorkspaceGlobalPersistence />
           <ResultCardStyles />
           <ResultDownload />
           <SiteFooter />
