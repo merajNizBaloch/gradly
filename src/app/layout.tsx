@@ -4,6 +4,8 @@ import "./globals.css";
 import "./sidebar-summary.css";
 import "./print-card.css";
 import "./mobile.css";
+import "./mobile-preview.css";
+import MobileCardPreview from "./components/mobile-card-preview";
 import PrintButtonInterceptor from "./components/print-button-interceptor";
 import SiteFooter from "./components/site-footer";
 
@@ -19,6 +21,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
         <Suspense fallback={null}>
           {children}
           <PrintButtonInterceptor />
+          <MobileCardPreview />
           <SiteFooter />
         </Suspense>
       </body>
