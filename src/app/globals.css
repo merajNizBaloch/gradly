@@ -245,3 +245,51 @@ section.no-print.space-y-4 > [data-gradly-sidebar-tabs-slot] > [data-gradly-step
 html body [class*="rounded-"]:not([class*="rounded-full"]) {
   border-radius: 2px !important;
 }
+
+/*
+ * Paper-responsive result composition.
+ * Every result design is authored once on an A4 master canvas (210 x 297 mm).
+ * The selected paper acts only as the physical frame; the master is scaled and
+ * centered inside it, preserving typography, tables, signatures, and decoration.
+ */
+.gradly-paper {
+  container-type: size;
+  position: relative !important;
+  overflow: hidden !important;
+}
+
+.gradly-paper > div {
+  --gradly-paper-scale: 1;
+  position: absolute !important;
+  left: 50% !important;
+  top: 50% !important;
+  width: 210mm !important;
+  height: 297mm !important;
+  min-width: 210mm !important;
+  min-height: 297mm !important;
+  max-width: none !important;
+  max-height: none !important;
+  flex: none !important;
+  transform-origin: center center !important;
+  transform: translate(-50%, -50%) scale(var(--gradly-paper-scale)) !important;
+}
+
+/* Safe fallbacks for browsers without CSS typed arithmetic. */
+@container (max-width: 160mm) {
+  .gradly-paper > div { --gradly-paper-scale: .7047619; }
+}
+
+@container (min-width: 200mm) and (max-height: 285mm) {
+  .gradly-paper > div { --gradly-paper-scale: .94074; }
+}
+
+@container (min-width: 212mm) and (min-height: 330mm) {
+  .gradly-paper > div { --gradly-paper-scale: 1.02809; }
+}
+
+/* Dynamic best-fit scaling for A4, A5, Letter, Legal, and arbitrary Custom paper. */
+@supports (transform: scale(calc(100px / 100px))) {
+  .gradly-paper > div {
+    --gradly-paper-scale: min(calc(100cqw / 210mm), calc(100cqh / 297mm));
+  }
+}
