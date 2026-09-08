@@ -16,13 +16,50 @@
   }
 
   main > header.no-print + div > section:not(.no-print) > div.no-print {
+    height: 0 !important;
+    min-height: 0 !important;
+    overflow: visible !important;
     justify-content: flex-end !important;
     border: 0 !important;
     background: transparent !important;
-    padding: 2px 0 74px !important;
+    padding: 0 !important;
   }
 
   main > header.no-print + div > section:not(.no-print) > div.no-print > div:first-child {
+    display: none !important;
+  }
+
+  /* On phones, remove Print and use its topbar slot for the existing Design control. */
+  main > header.no-print > div:nth-child(2) > div:last-child {
+    padding-right: 50px !important;
+  }
+
+  main > header.no-print > div:nth-child(2) > div:last-child > button:last-child {
+    display: none !important;
+  }
+
+  main > header.no-print + div > section:not(.no-print) > div.no-print > div:last-child {
+    position: fixed !important;
+    top: calc(10px + env(safe-area-inset-top)) !important;
+    right: 10px !important;
+    z-index: 70 !important;
+    width: 42px !important;
+    height: 42px !important;
+  }
+
+  main > header.no-print + div > section:not(.no-print) > div.no-print > div:last-child > button {
+    width: 42px !important;
+    height: 42px !important;
+    min-width: 42px !important;
+    min-height: 42px !important;
+    justify-content: center !important;
+    gap: 0 !important;
+    padding: 5px !important;
+    border-color: #D8E3F0 !important;
+    box-shadow: none !important;
+  }
+
+  main > header.no-print + div > section:not(.no-print) > div.no-print > div:last-child > button > svg:last-child {
     display: none !important;
   }
 
