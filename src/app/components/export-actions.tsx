@@ -24,6 +24,16 @@ function paperSizeMm(design: DesignSettings) {
   return { width: 210, height: 297 };
 }
 
+function paperCssSize(design: DesignSettings) {
+  const page = paperSizeMm(design);
+  return { width: `${page.width}mm`, height: `${page.height}mm` };
+}
+
+function masterScale(design: DesignSettings) {
+  const page = paperSizeMm(design);
+  return Math.min(page.width / 210, page.height / 297);
+}
+
 function downloadBlob(blob: Blob, name: string) {
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement("a");
@@ -104,12 +114,22 @@ async function createPdfBlob(canvas: HTMLCanvasElement, design: DesignSettings) 
   return new Blob([...chunks, trailer].map(bytesToArrayBuffer), { type: "application/pdf" });
 }
 
-async function renderCard(targetId?: string) {
-  const scope = targetId
-    ? document.querySelector<HTMLElement>(`[data-gradly-export-id="${CSS.escape(targetId)}"]`)
-    : document;
+async function renderCard(targetId: string | undefined, design: DesignSettings) {
+  const selector = targetId
+    ? `[data-gradly-export-id="${CSS.escape(targetId)}"]`
+    : null;
+  const scope = selector
+    ? document.querySelector<HTMLElement>(selector)
+    : document.documentElement;
   const card = scope?.querySelector<HTMLElement>(".gradly-paper") || null;
   if (!card) throw new Error("The selected result card is not ready yet.");
+
+  if (document.fonts?.ready) {
+    try { await document.fonts.ready; } catch {}
+  }
+
+  const size = paperCssSize(design);
+  const scale = masterScale(design);
 
   return html2canvas(card, {
     scale: Math.min(3, Math.max(2, window.devicePixelRatio || 1)),
@@ -118,6 +138,51 @@ async function renderCard(targetId?: string) {
     backgroundColor: "#ffffff",
     logging: false,
     imageTimeout: 15000,
+    onclone: (clonedDocument) => {
+      const clonedScope = selector
+        ? clonedDocument.querySelector<HTMLElement>(selector)
+        : clonedDocument.documentElement;
+      const clonedCard = clonedScope?.querySelector<HTMLElement>(".gradly-paper") || null;
+      if (!clonedCard) return;
+
+      clonedCard.style.setProperty("width", size.width, "important");
+      clonedCard.style.setProperty("height", size.height, "important");
+      clonedCard.style.setProperty("min-height", size.height, "important");
+      clonedCard.style.setProperty("max-width", "none", "important");
+      clonedCard.style.setProperty("aspect-ratio", "auto", "important");
+      clonedCard.style.setProperty("overflow", "hidden", "important");
+      clonedCard.style.setProperty("margin", "0", "important");
+      clonedCard.style.setProperty("box-shadow", "none", "important");
+      clonedCard.style.setProperty("animation", "none", "important");
+      clonedCard.style.setProperty("transition", "none", "important");
+
+      const master = Array.from(clonedCard.children).find(
+        (child): child is HTMLElement => child instanceof clonedDocument.defaultView!.HTMLElement && child.tagName !== "STYLE",
+      );
+
+      if (master) {
+        master.style.setProperty("--gradly-paper-scale", String(scale));
+        master.style.setProperty("position", "absolute", "important");
+        master.style.setProperty("left", "50%", "important");
+        master.style.setProperty("top", "50%", "important");
+        master.style.setProperty("width", "210mm", "important");
+        master.style.setProperty("height", "297mm", "important");
+        master.style.setProperty("min-width", "210mm", "important");
+        master.style.setProperty("min-height", "297mm", "important");
+        master.style.setProperty("max-width", "none", "important");
+        master.style.setProperty("max-height", "none", "important");
+        master.style.setProperty("transform-origin", "center center", "important");
+        master.style.setProperty("transform", `translate(-50%, -50%) scale(${scale})`, "important");
+      }
+
+      const shell = clonedCard.closest<HTMLElement>(".gradly-card-scroll");
+      if (shell) {
+        shell.style.setProperty("overflow", "visible", "important");
+        shell.style.setProperty("height", "auto", "important");
+        shell.style.setProperty("padding", "0", "important");
+        shell.style.setProperty("background", "#ffffff", "important");
+      }
+    },
   });
 }
 
@@ -137,7 +202,7 @@ export default function ExportActions({
     setBusy(format);
     setError("");
     try {
-      const canvas = await renderCard(targetId);
+      const canvas = await renderCard(targetId, design);
       const fileName = `gradly-${safeName(student)}`;
 
       if (format === "png") {
