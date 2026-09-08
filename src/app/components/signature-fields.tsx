@@ -14,9 +14,9 @@ async function prepareSignature(file: File) {
   return new Promise<string>((resolve) => {
     const image = new Image();
     image.onload = () => {
-      const maxWidth = 900;
-      const maxHeight = 300;
-      const scale = Math.min(1, maxWidth / image.width, maxHeight / image.height);
+      const maxWidth = 600;
+      const maxHeight = 220;
+      const scale = Math.min(1, maxWidth / Math.max(1, image.width), maxHeight / Math.max(1, image.height));
       const width = Math.max(1, Math.round(image.width * scale));
       const height = Math.max(1, Math.round(image.height * scale));
       const canvas = document.createElement("canvas");
@@ -26,6 +26,10 @@ async function prepareSignature(file: File) {
       if (!context) return resolve(dataUrl);
       context.clearRect(0, 0, width, height);
       context.drawImage(image, 0, 0, width, height);
+
+      // WebP preserves transparency and is usually much smaller than a full-size PNG.
+      const webp = canvas.toDataURL("image/webp", 0.82);
+      if (webp.startsWith("data:image/webp")) return resolve(webp);
       resolve(canvas.toDataURL("image/png"));
     };
     image.onerror = () => resolve(dataUrl);
@@ -104,7 +108,7 @@ export default function SignatureFields({
     <div>
       <div className="mb-2">
         <p className="text-[9px] font-black uppercase tracking-[.16em] text-slate-400">Signatures</p>
-        <p className="mt-1 text-[10px] leading-4 text-slate-500">Upload transparent PNGs for the cleanest printed result.</p>
+        <p className="mt-1 text-[10px] leading-4 text-slate-500">Upload transparent PNGs for the cleanest printed result. Gradly optimizes the stored copy automatically.</p>
       </div>
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <SignatureInput label="Teacher signature" value={teacher} onChange={onTeacherChange} />
