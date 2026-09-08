@@ -34,14 +34,25 @@
     border-radius: 2px !important;
   }
 
+  /* Portrait viewer: narrow, tall, centered, and independent from phone orientation. */
   .gradly-mobile-preview-overlay {
-    padding-top: env(safe-area-inset-top);
-    padding-bottom: env(safe-area-inset-bottom);
+    padding: calc(10px + env(safe-area-inset-top)) 10px calc(10px + env(safe-area-inset-bottom)) !important;
+  }
+
+  .gradly-mobile-preview-sheet {
+    width: min(94vw, 430px) !important;
+    height: min(92dvh, 820px) !important;
+    max-width: 430px !important;
+    max-height: 92dvh !important;
+    aspect-ratio: auto !important;
+    border: 1px solid rgba(255, 255, 255, .18) !important;
   }
 
   .gradly-mobile-preview-body {
     overscroll-behavior: contain;
     -webkit-overflow-scrolling: touch;
+    padding: 10px !important;
+    background: #dfe4e9 !important;
   }
 
   .gradly-mobile-preview-host,
@@ -56,8 +67,8 @@
     height: auto !important;
     max-height: none !important;
     overflow: visible !important;
-    padding: 8px !important;
-    background: #dfe4e9 !important;
+    padding: 0 !important;
+    background: transparent !important;
   }
 
   .gradly-mobile-preview-host .gradly-card-scroll > div {
