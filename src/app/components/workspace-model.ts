@@ -1,5 +1,5 @@
 export type Subject = { id: number; name: string; total: number; obtained: number };
-export type TemplateId = "academic" | "modern" | "certificate" | "executive" | "minimal";
+export type TemplateId = "academic" | "modern" | "certificate" | "executive" | "minimal" | "heritage" | "ledger" | "scholar";
 export type ThemeId =
   | "academic-navy"
   | "academic-emerald"
@@ -20,7 +20,19 @@ export type ThemeId =
   | "minimal-slate"
   | "minimal-teal"
   | "minimal-olive"
-  | "minimal-rose";
+  | "minimal-rose"
+  | "heritage-navy"
+  | "heritage-forest"
+  | "heritage-maroon"
+  | "heritage-sepia"
+  | "ledger-blue"
+  | "ledger-green"
+  | "ledger-charcoal"
+  | "ledger-burgundy"
+  | "scholar-royal"
+  | "scholar-teal"
+  | "scholar-violet"
+  | "scholar-ruby";
 export type PaperSize = "a4" | "a5" | "letter" | "legal" | "custom";
 export type Band = { grade: string; min: number; label: string };
 export type StepId = "student" | "marks" | "finalize";
@@ -56,35 +68,53 @@ export const defaultSchool: SchoolSettings = {
 };
 
 export const templates: Template[] = [
-  { id: "academic", name: "Academic", description: "Formal institutional report", themes: [
+  { id: "academic", name: "Academic", description: "Classic institutional report with balanced school, student and marks sections", themes: [
     { id: "academic-navy", name: "Navy", ink: "#17365D", wash: "#F3F6F9", accent: "#17365D" },
     { id: "academic-emerald", name: "Emerald", ink: "#155E4A", wash: "#F1F8F5", accent: "#167A5B" },
     { id: "academic-burgundy", name: "Burgundy", ink: "#6B2435", wash: "#FBF3F5", accent: "#9B3A50" },
     { id: "academic-plum", name: "Plum", ink: "#4B315F", wash: "#F7F3F9", accent: "#74518B" },
   ]},
-  { id: "modern", name: "Modern", description: "Contemporary rounded layout", themes: [
+  { id: "modern", name: "Modern Split", description: "Contemporary split composition with a bold performance hero", themes: [
     { id: "modern-ocean", name: "Ocean", ink: "#155E75", wash: "#F0F9FA", accent: "#0E7490" },
     { id: "modern-forest", name: "Forest", ink: "#1F5A43", wash: "#F1F8F4", accent: "#2D7A5B" },
     { id: "modern-coral", name: "Coral", ink: "#9A3F3F", wash: "#FFF5F3", accent: "#C15B52" },
     { id: "modern-indigo", name: "Indigo", ink: "#4338A8", wash: "#F3F4FF", accent: "#5B5BD6" },
   ]},
-  { id: "certificate", name: "Certificate", description: "Ornate ceremonial layout", themes: [
+  { id: "certificate", name: "Certificate", description: "Ceremonial certificate composition with double frame and centered achievement hierarchy", themes: [
     { id: "certificate-gold", name: "Antique Gold", ink: "#5B3A20", wash: "#FBF6EE", accent: "#A9793D" },
     { id: "certificate-emerald", name: "Jade", ink: "#14532D", wash: "#F2F8F3", accent: "#4D8B63" },
     { id: "certificate-burgundy", name: "Crimson", ink: "#641E2B", wash: "#FBF2F4", accent: "#A54A5A" },
     { id: "certificate-royal", name: "Royal Blue", ink: "#253B73", wash: "#F2F5FB", accent: "#5D74B4" },
   ]},
-  { id: "executive", name: "Executive", description: "Luxury leadership report", themes: [
+  { id: "executive", name: "Executive", description: "Asymmetric premium report with a strong side rail and metric emphasis", themes: [
     { id: "executive-charcoal", name: "Charcoal", ink: "#252525", wash: "#F5F5F3", accent: "#6B6B66" },
     { id: "executive-navy", name: "Midnight", ink: "#172554", wash: "#F1F4FA", accent: "#3D5A9B" },
     { id: "executive-wine", name: "Wine", ink: "#5C1F35", wash: "#FBF2F6", accent: "#9A4968" },
     { id: "executive-plum", name: "Plum", ink: "#31233D", wash: "#F6F1F8", accent: "#74558A" },
   ]},
-  { id: "minimal", name: "Minimal", description: "Clean compact academic", themes: [
+  { id: "minimal", name: "Minimal", description: "Typography-first result sheet with thin rules and generous white space", themes: [
     { id: "minimal-slate", name: "Slate", ink: "#334155", wash: "#F8FAFC", accent: "#64748B" },
     { id: "minimal-teal", name: "Teal", ink: "#115E59", wash: "#F0FDFA", accent: "#0F766E" },
     { id: "minimal-olive", name: "Olive", wash: "#F5F8F0", ink: "#465A32", accent: "#6C824D" },
     { id: "minimal-rose", name: "Rose", ink: "#7A3E4B", wash: "#FFF6F7", accent: "#A95D6C" },
+  ]},
+  { id: "heritage", name: "Heritage", description: "Traditional crest-style result card with ribbon title, double rules and ornamental details", themes: [
+    { id: "heritage-navy", name: "Heritage Navy", ink: "#17345C", wash: "#F6F2E8", accent: "#B08A4A" },
+    { id: "heritage-forest", name: "Forest Gold", ink: "#234B3A", wash: "#F5F4E9", accent: "#9A7A3A" },
+    { id: "heritage-maroon", name: "Maroon Gold", ink: "#6B2837", wash: "#FBF5EA", accent: "#B48A45" },
+    { id: "heritage-sepia", name: "Sepia", ink: "#5D4633", wash: "#FAF5EA", accent: "#9A7448" },
+  ]},
+  { id: "ledger", name: "Ledger", description: "Register-inspired composition with boxed identity fields and structured academic table", themes: [
+    { id: "ledger-blue", name: "Register Blue", ink: "#244B73", wash: "#F5F8FB", accent: "#6887A5" },
+    { id: "ledger-green", name: "Register Green", ink: "#315A47", wash: "#F4F8F5", accent: "#708D7B" },
+    { id: "ledger-charcoal", name: "Graphite", ink: "#333A42", wash: "#F6F7F8", accent: "#747D86" },
+    { id: "ledger-burgundy", name: "Burgundy", ink: "#6A3442", wash: "#FAF5F6", accent: "#9A6671" },
+  ]},
+  { id: "scholar", name: "Scholar", description: "Editorial academic composition with grade medallion, angular accents and strong student focus", themes: [
+    { id: "scholar-royal", name: "Royal", ink: "#254A91", wash: "#F2F6FD", accent: "#D39B36" },
+    { id: "scholar-teal", name: "Teal", ink: "#116A6B", wash: "#F0FAF9", accent: "#D59A3A" },
+    { id: "scholar-violet", name: "Violet", ink: "#59418B", wash: "#F7F4FB", accent: "#D3A144" },
+    { id: "scholar-ruby", name: "Ruby", ink: "#8A354B", wash: "#FCF3F5", accent: "#C8963D" },
   ]},
 ];
 
