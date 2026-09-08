@@ -8,7 +8,31 @@ export default function MobileCardPreview() {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
   const [ready, setReady] = useState(false);
+  const [compactTrigger, setCompactTrigger] = useState(false);
   const hostRef = useRef<HTMLDivElement>(null);
+  const lastScrollYRef = useRef(0);
+
+  useEffect(() => {
+    lastScrollYRef.current = window.scrollY;
+
+    const onScroll = () => {
+      const currentY = window.scrollY;
+      const previousY = lastScrollYRef.current;
+
+      if (currentY < 32) {
+        setCompactTrigger(false);
+      } else if (currentY > previousY + 6) {
+        setCompactTrigger(true);
+      } else if (currentY < previousY - 6) {
+        setCompactTrigger(false);
+      }
+
+      lastScrollYRef.current = currentY;
+    };
+
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
 
   useEffect(() => {
     if (!open) return;
@@ -62,11 +86,11 @@ export default function MobileCardPreview() {
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="gradly-mobile-preview-trigger no-print fixed z-[145] hidden items-center gap-2 bg-[#0F4AA8] px-4 py-3 text-xs font-black text-white shadow-[0_14px_36px_rgba(15,74,168,.32)] max-md:flex"
+        className={`gradly-mobile-preview-trigger no-print fixed z-[145] hidden items-center bg-[#0F4AA8] py-3 text-xs font-black text-white shadow-[0_14px_36px_rgba(15,74,168,.32)] transition-all duration-200 max-md:flex ${compactTrigger ? "gap-0 px-3.5" : "gap-2 px-4"}`}
         aria-label="Preview result card"
       >
         <Eye size={16} />
-        Preview Card
+        {!compactTrigger && <span>Preview Card</span>}
       </button>
 
       {open && (
