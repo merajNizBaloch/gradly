@@ -43,7 +43,6 @@ const REQUIRED_STUDENT_FIELDS = [
 ] as const;
 
 type RequiredStudentField = (typeof REQUIRED_STUDENT_FIELDS)[number];
-
 type TextControl = HTMLInputElement | HTMLTextAreaElement;
 
 function workspaceForm() {
@@ -63,6 +62,16 @@ function finalizeContent() {
   const form = workspaceForm();
   if (!form) return null;
   return form.querySelector<HTMLElement>("div.p-5 > div.space-y-5");
+}
+
+function syncLegacyNewStudentButton() {
+  const target = finalizeContent();
+  if (!target) return;
+  const legacy = Array.from(target.querySelectorAll<HTMLButtonElement>("button")).find(
+    (button) => /^Start next student$/i.test(button.textContent?.replace(/\s+/g, " ").trim() || ""),
+  );
+  if (!legacy) return;
+  legacy.style.display = window.matchMedia("(max-width: 767px)").matches ? "none" : "";
 }
 
 function fieldLabel(input: TextControl) {
@@ -280,6 +289,7 @@ export default function WorkspaceInputGuard() {
       const nextStage = currentStep();
       setStage(nextStage);
       setPortalTarget(nextStage === 3 ? finalizeContent() : null);
+      syncLegacyNewStudentButton();
     };
 
     const applyRules = (control: Element | null) => {
@@ -455,6 +465,11 @@ export default function WorkspaceInputGuard() {
         }, 450);
       }
 
+      if (/^(?:Save to this browser|Update browser save)$/i.test(text)) {
+        window.setTimeout(syncLegacyNewStudentButton, 100);
+        window.setTimeout(syncLegacyNewStudentButton, 450);
+      }
+
       window.requestAnimationFrame(() => {
         applyVisibleRules();
         refreshStage();
@@ -473,6 +488,9 @@ export default function WorkspaceInputGuard() {
       showMessage("Image files must be 5 MB or smaller.");
     };
 
+    const media = window.matchMedia("(max-width: 767px)");
+    const onViewportChange = () => syncLegacyNewStudentButton();
+
     applyVisibleRules();
     refreshStage();
     document.addEventListener("focusin", onFocusIn);
@@ -481,6 +499,7 @@ export default function WorkspaceInputGuard() {
     document.addEventListener("input", onInput, true);
     document.addEventListener("change", onChange, true);
     document.addEventListener("click", onClick, true);
+    media.addEventListener("change", onViewportChange);
 
     return () => {
       document.removeEventListener("focusin", onFocusIn);
@@ -489,6 +508,7 @@ export default function WorkspaceInputGuard() {
       document.removeEventListener("input", onInput, true);
       document.removeEventListener("change", onChange, true);
       document.removeEventListener("click", onClick, true);
+      media.removeEventListener("change", onViewportChange);
       if (messageTimer.current) window.clearTimeout(messageTimer.current);
     };
   }, []);
