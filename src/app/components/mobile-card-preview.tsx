@@ -8,7 +8,31 @@ export default function MobileCardPreview() {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
   const [ready, setReady] = useState(false);
+  const [compactTrigger, setCompactTrigger] = useState(false);
   const hostRef = useRef<HTMLDivElement>(null);
+  const lastScrollYRef = useRef(0);
+
+  useEffect(() => {
+    lastScrollYRef.current = window.scrollY;
+
+    const onScroll = () => {
+      const currentY = window.scrollY;
+      const previousY = lastScrollYRef.current;
+
+      if (currentY < 32) {
+        setCompactTrigger(false);
+      } else if (currentY > previousY + 6) {
+        setCompactTrigger(true);
+      } else if (currentY < previousY - 6) {
+        setCompactTrigger(false);
+      }
+
+      lastScrollYRef.current = currentY;
+    };
+
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
 
   useEffect(() => {
     if (!open) return;
@@ -62,23 +86,23 @@ export default function MobileCardPreview() {
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="gradly-mobile-preview-trigger no-print fixed z-[145] hidden items-center gap-2 bg-[#0F4AA8] px-4 py-3 text-xs font-black text-white shadow-[0_14px_36px_rgba(15,74,168,.32)] max-md:flex"
+        className={`gradly-mobile-preview-trigger no-print fixed z-[145] hidden items-center bg-[#0F4AA8] py-3 text-xs font-black text-white shadow-[0_14px_36px_rgba(15,74,168,.32)] transition-all duration-200 max-md:flex ${compactTrigger ? "gap-0 px-3.5" : "gap-2 px-4"}`}
         aria-label="Preview result card"
       >
         <Eye size={16} />
-        Preview Card
+        {!compactTrigger && <span>Preview Card</span>}
       </button>
 
       {open && (
         <div
-          className="gradly-mobile-preview-overlay no-print fixed inset-0 z-[210] hidden bg-slate-950/70 max-md:block"
+          className="gradly-mobile-preview-overlay no-print fixed inset-0 z-[210] hidden items-center justify-center bg-slate-950/75 max-md:flex"
           onMouseDown={(event) => event.target === event.currentTarget && setOpen(false)}
         >
-          <div className="flex h-[100dvh] w-full flex-col bg-[#EAF1F7]">
+          <div className="gradly-mobile-preview-sheet flex w-full flex-col overflow-hidden bg-[#EAF1F7] shadow-[0_28px_90px_rgba(2,12,27,.45)]">
             <div className="flex shrink-0 items-center justify-between border-b border-[#D8E3F0] bg-white px-4 py-3">
               <div>
                 <p className="text-[9px] font-black uppercase tracking-[.18em] text-[#11B8B2]">Result preview</p>
-                <p className="mt-0.5 text-sm font-black text-[#0B3477]">Current result card</p>
+                <p className="mt-0.5 text-sm font-black text-[#0B3477]">Portrait card preview</p>
               </div>
               <button
                 type="button"

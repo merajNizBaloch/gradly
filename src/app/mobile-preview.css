@@ -16,13 +16,50 @@
   }
 
   main > header.no-print + div > section:not(.no-print) > div.no-print {
+    height: 0 !important;
+    min-height: 0 !important;
+    overflow: visible !important;
     justify-content: flex-end !important;
     border: 0 !important;
     background: transparent !important;
-    padding: 2px 0 74px !important;
+    padding: 0 !important;
   }
 
   main > header.no-print + div > section:not(.no-print) > div.no-print > div:first-child {
+    display: none !important;
+  }
+
+  /* On phones, remove Print and use its topbar slot for the existing Design control. */
+  main > header.no-print > div:nth-child(2) > div:last-child {
+    padding-right: 50px !important;
+  }
+
+  main > header.no-print > div:nth-child(2) > div:last-child > button:last-child {
+    display: none !important;
+  }
+
+  main > header.no-print + div > section:not(.no-print) > div.no-print > div:last-child {
+    position: fixed !important;
+    top: calc(10px + env(safe-area-inset-top)) !important;
+    right: 10px !important;
+    z-index: 70 !important;
+    width: 42px !important;
+    height: 42px !important;
+  }
+
+  main > header.no-print + div > section:not(.no-print) > div.no-print > div:last-child > button {
+    width: 42px !important;
+    height: 42px !important;
+    min-width: 42px !important;
+    min-height: 42px !important;
+    justify-content: center !important;
+    gap: 0 !important;
+    padding: 5px !important;
+    border-color: #D8E3F0 !important;
+    box-shadow: none !important;
+  }
+
+  main > header.no-print + div > section:not(.no-print) > div.no-print > div:last-child > button > svg:last-child {
     display: none !important;
   }
 
@@ -34,14 +71,25 @@
     border-radius: 2px !important;
   }
 
+  /* Portrait viewer: narrow, tall, centered, and independent from phone orientation. */
   .gradly-mobile-preview-overlay {
-    padding-top: env(safe-area-inset-top);
-    padding-bottom: env(safe-area-inset-bottom);
+    padding: calc(10px + env(safe-area-inset-top)) 10px calc(10px + env(safe-area-inset-bottom)) !important;
+  }
+
+  .gradly-mobile-preview-sheet {
+    width: min(94vw, 430px) !important;
+    height: min(92dvh, 820px) !important;
+    max-width: 430px !important;
+    max-height: 92dvh !important;
+    aspect-ratio: auto !important;
+    border: 1px solid rgba(255, 255, 255, .18) !important;
   }
 
   .gradly-mobile-preview-body {
     overscroll-behavior: contain;
     -webkit-overflow-scrolling: touch;
+    padding: 10px !important;
+    background: #dfe4e9 !important;
   }
 
   .gradly-mobile-preview-host,
@@ -56,8 +104,8 @@
     height: auto !important;
     max-height: none !important;
     overflow: visible !important;
-    padding: 8px !important;
-    background: #dfe4e9 !important;
+    padding: 0 !important;
+    background: transparent !important;
   }
 
   .gradly-mobile-preview-host .gradly-card-scroll > div {
