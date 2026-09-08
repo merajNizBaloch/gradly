@@ -3,6 +3,7 @@ import { Suspense } from "react";
 import "./globals.css";
 import "./sidebar-summary.css";
 import "./print-card.css";
+import "./mobile.css";
 import PrintButtonInterceptor from "./components/print-button-interceptor";
 import SiteFooter from "./components/site-footer";
 
