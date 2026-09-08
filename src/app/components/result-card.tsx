@@ -18,6 +18,8 @@ export default function ResultCard({
   photo,
   subjects,
   bands,
+  teacherRemarks,
+  principalRemarks,
   verificationUrl,
 }: {
   school: SchoolSettings;
@@ -34,6 +36,8 @@ export default function ResultCard({
   photo: string;
   subjects: Subject[];
   bands: Band[];
+  teacherRemarks: string;
+  principalRemarks: string;
   verificationUrl: string;
 }) {
   const total = subjects.reduce((sum, subject) => sum + Math.max(0, subject.total), 0);
@@ -51,6 +55,8 @@ export default function ResultCard({
   const certificate = design.template === "certificate";
   const executive = design.template === "executive";
   const minimal = design.template === "minimal";
+  const resolvedTeacherRemarks = teacherRemarks.trim() || autoRemark(percent, status);
+  const resolvedPrincipalRemarks = principalRemarks.trim();
 
   return (
     <div className="print-shell flex min-h-0 flex-1 items-start justify-center overflow-auto rounded-[22px] bg-[#dfe4e9] p-3 sm:p-5">
@@ -97,7 +103,19 @@ export default function ResultCard({
           </div>
 
           <div className="mt-6 grid grid-cols-[1fr_auto] gap-5 rounded-xl border p-4" style={{ borderColor: activeTheme.ink, backgroundColor: activeTheme.wash }}>
-            <div><p className="text-[8px] font-black uppercase tracking-[.14em] text-slate-400">Teacher remarks</p><p className="mt-2 text-[10px] leading-5 text-slate-600">{autoRemark(percent, status)}</p><div className="mt-4 flex gap-6 text-[10px] text-slate-500"><span>Attendance: <strong>{attendance}%</strong></span><span>Position: <strong>{position || "—"}</strong></span></div></div>
+            <div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <p className="text-[8px] font-black uppercase tracking-[.14em] text-slate-400">Teacher remarks</p>
+                  <p className="mt-2 text-[10px] leading-5 text-slate-600">{resolvedTeacherRemarks}</p>
+                </div>
+                <div className="border-l pl-4" style={{ borderColor: activeTheme.accent }}>
+                  <p className="text-[8px] font-black uppercase tracking-[.14em] text-slate-400">Principal remarks</p>
+                  <p className="mt-2 text-[10px] leading-5 text-slate-600">{resolvedPrincipalRemarks || "—"}</p>
+                </div>
+              </div>
+              <div className="mt-4 flex gap-6 border-t pt-3 text-[10px] text-slate-500" style={{ borderColor: activeTheme.accent }}><span>Attendance: <strong>{attendance}%</strong></span><span>Position: <strong>{position || "—"}</strong></span></div>
+            </div>
             {verificationUrl ? <div className="text-center"><QRCodeSVG value={verificationUrl} size={64} /><p className="mt-1 text-[7px] font-bold text-slate-400">VERIFY</p></div> : null}
           </div>
 
