@@ -240,3 +240,8 @@ section.no-print.space-y-4 > [data-gradly-sidebar-tabs-slot] > [data-gradly-step
     break-inside: avoid;
   }
 }
+
+/* Sharp Gradly UI: keep intentional circles/pills, reduce every other rounded treatment to 2px. */
+html body [class*="rounded-"]:not([class*="rounded-full"]) {
+  border-radius: 2px !important;
+}
