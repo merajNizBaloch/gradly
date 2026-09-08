@@ -7,6 +7,9 @@ import type { DesignSettings } from "./workspace-model";
 
 type Format = "png" | "jpg" | "pdf";
 
+const MASTER_WIDTH_MM = 210;
+const MASTER_HEIGHT_MM = 297;
+
 function safeName(value: string) {
   return value.trim().replace(/[^a-z0-9]+/gi, "-").replace(/^-+|-+$/g, "").toLowerCase() || "student-result";
 }
@@ -17,21 +20,11 @@ function paperSizeMm(design: DesignSettings) {
   if (design.paperSize === "legal") return { width: 215.9, height: 355.6 };
   if (design.paperSize === "custom") {
     return {
-      width: Math.max(80, Number(design.customWidth) || 210),
-      height: Math.max(100, Number(design.customHeight) || 297),
+      width: Math.max(80, Number(design.customWidth) || MASTER_WIDTH_MM),
+      height: Math.max(100, Number(design.customHeight) || MASTER_HEIGHT_MM),
     };
   }
-  return { width: 210, height: 297 };
-}
-
-function paperCssSize(design: DesignSettings) {
-  const page = paperSizeMm(design);
-  return { width: `${page.width}mm`, height: `${page.height}mm` };
-}
-
-function masterScale(design: DesignSettings) {
-  const page = paperSizeMm(design);
-  return Math.min(page.width / 210, page.height / 297);
+  return { width: MASTER_WIDTH_MM, height: MASTER_HEIGHT_MM };
 }
 
 function downloadBlob(blob: Blob, name: string) {
@@ -114,74 +107,159 @@ async function createPdfBlob(canvas: HTMLCanvasElement, design: DesignSettings) 
   return new Blob([...chunks, trailer].map(bytesToArrayBuffer), { type: "application/pdf" });
 }
 
-async function renderCard(targetId: string | undefined, design: DesignSettings) {
-  const selector = targetId
-    ? `[data-gradly-export-id="${CSS.escape(targetId)}"]`
-    : null;
-  const scope = selector
-    ? document.querySelector<HTMLElement>(selector)
-    : document.documentElement;
-  const card = scope?.querySelector<HTMLElement>(".gradly-paper") || null;
-  if (!card) throw new Error("The selected result card is not ready yet.");
+async function waitForImages(root: HTMLElement) {
+  const images = Array.from(root.querySelectorAll("img"));
+  await Promise.all(images.map((image) => {
+    if (image.complete) return Promise.resolve();
+    return new Promise<void>((resolve) => {
+      const finish = () => resolve();
+      image.addEventListener("load", finish, { once: true });
+      image.addEventListener("error", finish, { once: true });
+      window.setTimeout(finish, 4000);
+    });
+  }));
+}
 
+function sourceScope(targetId?: string) {
+  if (targetId) {
+    return document.querySelector<HTMLElement>(`[data-gradly-export-id="${CSS.escape(targetId)}"]`);
+  }
+  return document.querySelector<HTMLElement>(".gradly-signature-scope");
+}
+
+function prepareMasterClone(targetId?: string) {
+  const source = sourceScope(targetId);
+  if (!source) throw new Error("The selected result card is not ready yet.");
+
+  const clone = source.cloneNode(true) as HTMLElement;
+  const host = document.createElement("div");
+  host.setAttribute("data-gradly-export-host", "true");
+  host.style.setProperty("position", "fixed", "important");
+  host.style.setProperty("left", "0", "important");
+  host.style.setProperty("top", "0", "important");
+  host.style.setProperty("width", `${MASTER_WIDTH_MM}mm`, "important");
+  host.style.setProperty("height", `${MASTER_HEIGHT_MM}mm`, "important");
+  host.style.setProperty("overflow", "hidden", "important");
+  host.style.setProperty("pointer-events", "none", "important");
+  host.style.setProperty("z-index", "-2147483647", "important");
+  host.style.setProperty("background", "#ffffff", "important");
+  host.appendChild(clone);
+  document.body.appendChild(host);
+
+  clone.style.setProperty("display", "block", "important");
+  clone.style.setProperty("width", `${MASTER_WIDTH_MM}mm`, "important");
+  clone.style.setProperty("height", `${MASTER_HEIGHT_MM}mm`, "important");
+  clone.style.setProperty("margin", "0", "important");
+  clone.style.setProperty("padding", "0", "important");
+
+  const shell = clone.querySelector<HTMLElement>(".gradly-card-scroll");
+  if (shell) {
+    shell.style.setProperty("display", "block", "important");
+    shell.style.setProperty("width", `${MASTER_WIDTH_MM}mm`, "important");
+    shell.style.setProperty("height", `${MASTER_HEIGHT_MM}mm`, "important");
+    shell.style.setProperty("min-height", `${MASTER_HEIGHT_MM}mm`, "important");
+    shell.style.setProperty("overflow", "hidden", "important");
+    shell.style.setProperty("margin", "0", "important");
+    shell.style.setProperty("padding", "0", "important");
+    shell.style.setProperty("background", "#ffffff", "important");
+  }
+
+  const centering = shell?.firstElementChild as HTMLElement | null;
+  if (centering) {
+    centering.style.setProperty("display", "block", "important");
+    centering.style.setProperty("width", `${MASTER_WIDTH_MM}mm`, "important");
+    centering.style.setProperty("height", `${MASTER_HEIGHT_MM}mm`, "important");
+    centering.style.setProperty("min-width", "0", "important");
+    centering.style.setProperty("margin", "0", "important");
+    centering.style.setProperty("padding", "0", "important");
+  }
+
+  const card = clone.querySelector<HTMLElement>(".gradly-paper");
+  if (!card) {
+    host.remove();
+    throw new Error("The result card could not be prepared for download.");
+  }
+
+  card.style.setProperty("position", "relative", "important");
+  card.style.setProperty("display", "flex", "important");
+  card.style.setProperty("width", `${MASTER_WIDTH_MM}mm`, "important");
+  card.style.setProperty("height", `${MASTER_HEIGHT_MM}mm`, "important");
+  card.style.setProperty("min-height", `${MASTER_HEIGHT_MM}mm`, "important");
+  card.style.setProperty("max-width", "none", "important");
+  card.style.setProperty("aspect-ratio", "auto", "important");
+  card.style.setProperty("overflow", "hidden", "important");
+  card.style.setProperty("margin", "0", "important");
+  card.style.setProperty("box-shadow", "none", "important");
+  card.style.setProperty("animation", "none", "important");
+  card.style.setProperty("transition", "none", "important");
+
+  const master = Array.from(card.children).find((child) => child.tagName !== "STYLE") as HTMLElement | undefined;
+  if (master) {
+    master.style.setProperty("--gradly-paper-scale", "1", "important");
+    master.style.setProperty("position", "absolute", "important");
+    master.style.setProperty("left", "0", "important");
+    master.style.setProperty("top", "0", "important");
+    master.style.setProperty("width", `${MASTER_WIDTH_MM}mm`, "important");
+    master.style.setProperty("height", `${MASTER_HEIGHT_MM}mm`, "important");
+    master.style.setProperty("min-width", `${MASTER_WIDTH_MM}mm`, "important");
+    master.style.setProperty("min-height", `${MASTER_HEIGHT_MM}mm`, "important");
+    master.style.setProperty("max-width", "none", "important");
+    master.style.setProperty("max-height", "none", "important");
+    master.style.setProperty("transform", "none", "important");
+    master.style.setProperty("transform-origin", "top left", "important");
+  }
+
+  return { host, card };
+}
+
+function fitMasterToPaper(master: HTMLCanvasElement, design: DesignSettings) {
+  const page = paperSizeMm(design);
+  const pixelsPerMm = master.width / MASTER_WIDTH_MM;
+  const width = Math.max(1, Math.round(page.width * pixelsPerMm));
+  const height = Math.max(1, Math.round(page.height * pixelsPerMm));
+  const output = document.createElement("canvas");
+  output.width = width;
+  output.height = height;
+
+  const context = output.getContext("2d");
+  if (!context) throw new Error("Could not prepare the result image.");
+  context.fillStyle = "#ffffff";
+  context.fillRect(0, 0, width, height);
+
+  const scale = Math.min(width / master.width, height / master.height);
+  const drawWidth = master.width * scale;
+  const drawHeight = master.height * scale;
+  const x = (width - drawWidth) / 2;
+  const y = (height - drawHeight) / 2;
+  context.drawImage(master, x, y, drawWidth, drawHeight);
+  return output;
+}
+
+async function renderCard(targetId: string | undefined, design: DesignSettings) {
   if (document.fonts?.ready) {
     try { await document.fonts.ready; } catch {}
   }
 
-  const size = paperCssSize(design);
-  const scale = masterScale(design);
+  const { host, card } = prepareMasterClone(targetId);
+  try {
+    await waitForImages(host);
+    await new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
 
-  return html2canvas(card, {
-    scale: Math.min(3, Math.max(2, window.devicePixelRatio || 1)),
-    useCORS: true,
-    allowTaint: false,
-    backgroundColor: "#ffffff",
-    logging: false,
-    imageTimeout: 15000,
-    onclone: (clonedDocument) => {
-      const clonedScope = selector
-        ? clonedDocument.querySelector<HTMLElement>(selector)
-        : clonedDocument.documentElement;
-      const clonedCard = clonedScope?.querySelector<HTMLElement>(".gradly-paper") || null;
-      if (!clonedCard) return;
+    const masterCanvas = await html2canvas(card, {
+      scale: Math.min(3, Math.max(2, window.devicePixelRatio || 1)),
+      useCORS: true,
+      allowTaint: false,
+      backgroundColor: "#ffffff",
+      logging: false,
+      imageTimeout: 15000,
+      scrollX: 0,
+      scrollY: 0,
+    });
 
-      clonedCard.style.setProperty("width", size.width, "important");
-      clonedCard.style.setProperty("height", size.height, "important");
-      clonedCard.style.setProperty("min-height", size.height, "important");
-      clonedCard.style.setProperty("max-width", "none", "important");
-      clonedCard.style.setProperty("aspect-ratio", "auto", "important");
-      clonedCard.style.setProperty("overflow", "hidden", "important");
-      clonedCard.style.setProperty("margin", "0", "important");
-      clonedCard.style.setProperty("box-shadow", "none", "important");
-      clonedCard.style.setProperty("animation", "none", "important");
-      clonedCard.style.setProperty("transition", "none", "important");
-
-      const master = Array.from(clonedCard.children).find((child) => child.tagName !== "STYLE") as HTMLElement | undefined;
-
-      if (master) {
-        master.style.setProperty("--gradly-paper-scale", String(scale));
-        master.style.setProperty("position", "absolute", "important");
-        master.style.setProperty("left", "50%", "important");
-        master.style.setProperty("top", "50%", "important");
-        master.style.setProperty("width", "210mm", "important");
-        master.style.setProperty("height", "297mm", "important");
-        master.style.setProperty("min-width", "210mm", "important");
-        master.style.setProperty("min-height", "297mm", "important");
-        master.style.setProperty("max-width", "none", "important");
-        master.style.setProperty("max-height", "none", "important");
-        master.style.setProperty("transform-origin", "center center", "important");
-        master.style.setProperty("transform", `translate(-50%, -50%) scale(${scale})`, "important");
-      }
-
-      const shell = clonedCard.closest<HTMLElement>(".gradly-card-scroll");
-      if (shell) {
-        shell.style.setProperty("overflow", "visible", "important");
-        shell.style.setProperty("height", "auto", "important");
-        shell.style.setProperty("padding", "0", "important");
-        shell.style.setProperty("background", "#ffffff", "important");
-      }
-    },
-  });
+    return fitMasterToPaper(masterCanvas, design);
+  } finally {
+    host.remove();
+  }
 }
 
 export default function ExportActions({
