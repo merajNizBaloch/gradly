@@ -24,20 +24,20 @@ export default function ResultCardWithSignatures({
     <div className="gradly-signature-scope" data-gradly-export-id={exportId} style={style}>
       <style jsx global>{`
         .gradly-signature-scope .gradly-paper .mt-auto.pt-12 {
-          padding-top: 74px !important;
+          padding-top: 104px !important;
         }
         .gradly-signature-scope .gradly-paper .mt-auto.pt-12 > div > div.w-40 {
           position: relative;
-          width: 190px !important;
-          max-width: 44%;
+          width: 220px !important;
+          max-width: 46%;
         }
         .gradly-signature-scope .gradly-paper .mt-auto.pt-12 > div > div.w-40::before {
           content: "";
           position: absolute;
-          left: 6px;
-          right: 6px;
-          bottom: calc(100% + 5px);
-          height: 58px;
+          left: 4px;
+          right: 4px;
+          bottom: calc(100% + 6px);
+          height: 84px;
           background-repeat: no-repeat;
           background-position: center bottom;
           background-size: contain;
