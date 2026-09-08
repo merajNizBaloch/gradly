@@ -1,0 +1,91 @@
+/* Mobile-only card preview overlay. Desktop and tablet layouts remain unchanged. */
+
+@media screen and (max-width: 767px) {
+  /* Keep the design control available, but remove the large inline card preview. */
+  main > header.no-print + div > section:not(.no-print) {
+    min-height: 0 !important;
+    height: auto !important;
+    overflow: visible !important;
+    border: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+  }
+
+  main > header.no-print + div > section:not(.no-print) > .gradly-signature-scope {
+    display: none !important;
+  }
+
+  main > header.no-print + div > section:not(.no-print) > div.no-print {
+    justify-content: flex-end !important;
+    border: 0 !important;
+    background: transparent !important;
+    padding: 2px 0 74px !important;
+  }
+
+  main > header.no-print + div > section:not(.no-print) > div.no-print > div:first-child {
+    display: none !important;
+  }
+
+  /* Float preview above the sticky Previous/Next controls. */
+  .gradly-mobile-preview-trigger {
+    right: 12px !important;
+    bottom: calc(76px + env(safe-area-inset-bottom)) !important;
+    min-height: 46px;
+    border-radius: 2px !important;
+  }
+
+  .gradly-mobile-preview-overlay {
+    padding-top: env(safe-area-inset-top);
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  .gradly-mobile-preview-body {
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .gradly-mobile-preview-host,
+  .gradly-mobile-preview-host .gradly-signature-scope,
+  .gradly-mobile-preview-host .gradly-card-scroll {
+    display: block !important;
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+
+  .gradly-mobile-preview-host .gradly-card-scroll {
+    height: auto !important;
+    max-height: none !important;
+    overflow: visible !important;
+    padding: 8px !important;
+    background: #dfe4e9 !important;
+  }
+
+  .gradly-mobile-preview-host .gradly-card-scroll > div {
+    width: 100% !important;
+    min-width: 0 !important;
+    justify-content: center !important;
+    padding-bottom: 0 !important;
+  }
+
+  .gradly-mobile-preview-host .gradly-paper {
+    width: 100% !important;
+    max-width: 100% !important;
+    height: auto !important;
+    min-height: 0 !important;
+    margin: 0 auto !important;
+    animation: none !important;
+    transition: none !important;
+    box-shadow: 0 12px 34px rgba(20, 36, 58, .18) !important;
+  }
+
+  /* Never let the TechCraft badge cover form navigation on phones. */
+  footer.no-print {
+    position: static !important;
+    inset: auto !important;
+    display: flex !important;
+    justify-content: center !important;
+    width: 100% !important;
+    margin: 14px auto 18px !important;
+    transform: none !important;
+  }
+}
