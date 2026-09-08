@@ -71,14 +71,14 @@ export default function MobileCardPreview() {
 
       {open && (
         <div
-          className="gradly-mobile-preview-overlay no-print fixed inset-0 z-[210] hidden bg-slate-950/70 max-md:block"
+          className="gradly-mobile-preview-overlay no-print fixed inset-0 z-[210] hidden items-center justify-center bg-slate-950/75 max-md:flex"
           onMouseDown={(event) => event.target === event.currentTarget && setOpen(false)}
         >
-          <div className="flex h-[100dvh] w-full flex-col bg-[#EAF1F7]">
+          <div className="gradly-mobile-preview-sheet flex w-full flex-col overflow-hidden bg-[#EAF1F7] shadow-[0_28px_90px_rgba(2,12,27,.45)]">
             <div className="flex shrink-0 items-center justify-between border-b border-[#D8E3F0] bg-white px-4 py-3">
               <div>
                 <p className="text-[9px] font-black uppercase tracking-[.18em] text-[#11B8B2]">Result preview</p>
-                <p className="mt-0.5 text-sm font-black text-[#0B3477]">Current result card</p>
+                <p className="mt-0.5 text-sm font-black text-[#0B3477]">Portrait card preview</p>
               </div>
               <button
                 type="button"
