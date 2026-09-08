@@ -104,9 +104,12 @@ async function createPdfBlob(canvas: HTMLCanvasElement, design: DesignSettings) 
   return new Blob([...chunks, trailer].map(bytesToArrayBuffer), { type: "application/pdf" });
 }
 
-async function renderCard() {
-  const card = document.querySelector<HTMLElement>(".gradly-paper");
-  if (!card) throw new Error("The result card is not ready yet.");
+async function renderCard(targetId?: string) {
+  const scope = targetId
+    ? document.querySelector<HTMLElement>(`[data-gradly-export-id="${CSS.escape(targetId)}"]`)
+    : document;
+  const card = scope?.querySelector<HTMLElement>(".gradly-paper") || null;
+  if (!card) throw new Error("The selected result card is not ready yet.");
 
   return html2canvas(card, {
     scale: Math.min(3, Math.max(2, window.devicePixelRatio || 1)),
@@ -118,7 +121,15 @@ async function renderCard() {
   });
 }
 
-export default function ExportActions({ student, design }: { student: string; design: DesignSettings }) {
+export default function ExportActions({
+  student,
+  design,
+  targetId,
+}: {
+  student: string;
+  design: DesignSettings;
+  targetId?: string;
+}) {
   const [busy, setBusy] = useState<Format | null>(null);
   const [error, setError] = useState("");
 
@@ -126,7 +137,7 @@ export default function ExportActions({ student, design }: { student: string; de
     setBusy(format);
     setError("");
     try {
-      const canvas = await renderCard();
+      const canvas = await renderCard(targetId);
       const fileName = `gradly-${safeName(student)}`;
 
       if (format === "png") {
