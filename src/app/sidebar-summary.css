@@ -1,0 +1,60 @@
+/* Compact live-result footer for the Gradly workflow sidebar. */
+header.no-print + div > aside.no-print {
+  display: flex !important;
+  flex-direction: column !important;
+}
+
+header.no-print + div > aside.no-print > div:last-child {
+  margin-top: auto !important;
+  border: 0 !important;
+  border-top: 1px solid rgba(255, 255, 255, 0.12) !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  padding: 10px 8px 4px !important;
+  box-shadow: none !important;
+}
+
+header.no-print + div > aside.no-print > div:last-child > div:first-child {
+  align-items: center !important;
+}
+
+header.no-print + div > aside.no-print > div:last-child > div:first-child > div:first-child {
+  display: flex !important;
+  align-items: baseline !important;
+  gap: 7px !important;
+}
+
+header.no-print + div > aside.no-print > div:last-child > div:first-child > div:first-child > p:first-child {
+  margin: 0 !important;
+  font-size: 7px !important;
+  letter-spacing: 0.14em !important;
+  color: rgba(255, 255, 255, 0.34) !important;
+}
+
+header.no-print + div > aside.no-print > div:last-child > div:first-child > div:first-child > p:last-child {
+  margin: 0 !important;
+  font-family: Arial, Helvetica, sans-serif !important;
+  font-size: 16px !important;
+  line-height: 1 !important;
+  font-weight: 800 !important;
+}
+
+header.no-print + div > aside.no-print > div:last-child > div:first-child > span {
+  border-radius: 999px !important;
+  padding: 4px 7px !important;
+  font-size: 8px !important;
+  line-height: 1 !important;
+}
+
+header.no-print + div > aside.no-print > div:last-child > div:last-child {
+  margin-top: 6px !important;
+  font-size: 8px !important;
+  line-height: 1.2 !important;
+  color: rgba(255, 255, 255, 0.42) !important;
+}
+
+@media (min-width: 1280px) {
+  header.no-print + div > aside.no-print {
+    overflow: hidden !important;
+  }
+}
