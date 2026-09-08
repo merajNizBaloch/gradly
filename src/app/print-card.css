@@ -5,6 +5,7 @@
 
 @media print {
   @page {
+    size: auto;
     margin: 0;
   }
 
