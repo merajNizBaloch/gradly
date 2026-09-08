@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Suspense } from "react";
 import "./globals.css";
 import "./sidebar-summary.css";
+import "./print-card.css";
 import SiteFooter from "./components/site-footer";
 
 export const metadata: Metadata = {
