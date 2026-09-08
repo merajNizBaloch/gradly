@@ -8,6 +8,7 @@ import "./mobile-preview.css";
 import MobileCardPreview from "./components/mobile-card-preview";
 import PrintButtonInterceptor from "./components/print-button-interceptor";
 import SiteFooter from "./components/site-footer";
+import UserFacingCopy from "./components/user-facing-copy";
 
 export const metadata: Metadata = {
   title: "Gradly — Academic Result Studio",
@@ -22,6 +23,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
           {children}
           <PrintButtonInterceptor />
           <MobileCardPreview />
+          <UserFacingCopy />
           <SiteFooter />
         </Suspense>
       </body>

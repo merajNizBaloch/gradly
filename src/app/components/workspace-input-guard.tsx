@@ -1,5 +1,6 @@
 "use client";
 
+import { createPortal } from "react-dom";
 import { useEffect, useRef, useState } from "react";
 import { readLocalDraft, saveLocalDraft, type LocalDraft } from "./local-results";
 import { defaultBands, defaultSchool, initialSubjects, type DesignSettings } from "./workspace-model";
@@ -42,6 +43,7 @@ const REQUIRED_STUDENT_FIELDS = [
 ] as const;
 
 type RequiredStudentField = (typeof REQUIRED_STUDENT_FIELDS)[number];
+type TextControl = HTMLInputElement | HTMLTextAreaElement;
 
 function workspaceForm() {
   return document.querySelector<HTMLElement>("main > header.no-print + div > section.no-print");
@@ -55,7 +57,24 @@ function currentStep() {
   return match ? Number(match[1]) : 1;
 }
 
-function fieldLabel(input: HTMLInputElement | HTMLTextAreaElement) {
+function finalizeContent() {
+  if (currentStep() !== 3) return null;
+  const form = workspaceForm();
+  if (!form) return null;
+  return form.querySelector<HTMLElement>("div.p-5 > div.space-y-5");
+}
+
+function syncLegacyNewStudentButton() {
+  const target = finalizeContent();
+  if (!target) return;
+  const legacy = Array.from(target.querySelectorAll<HTMLButtonElement>("button")).find(
+    (button) => /^Start next student$/i.test(button.textContent?.replace(/\s+/g, " ").trim() || ""),
+  );
+  if (!legacy) return;
+  legacy.style.display = window.matchMedia("(max-width: 767px)").matches ? "none" : "";
+}
+
+function fieldLabel(input: TextControl) {
   const span = input.closest("label")?.querySelector("span");
   return span?.textContent?.trim().toLowerCase() || "";
 }
@@ -64,6 +83,17 @@ function setNativeInputValue(input: HTMLInputElement, value: string) {
   const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
   setter?.call(input, value);
   input.dispatchEvent(new Event("input", { bubbles: true }));
+}
+
+function setNativeTextareaValue(input: HTMLTextAreaElement, value: string) {
+  const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")?.set;
+  setter?.call(input, value);
+  input.dispatchEvent(new Event("input", { bubbles: true }));
+}
+
+function setNativeTextValue(control: TextControl, value: string) {
+  if (control instanceof HTMLInputElement) setNativeInputValue(control, value);
+  else setNativeTextareaValue(control, value);
 }
 
 function markInputs() {
@@ -213,15 +243,53 @@ async function persistBlankStudentDraft() {
   });
 }
 
+function textLimit(control: TextControl) {
+  if (control instanceof HTMLTextAreaElement) return 300;
+
+  const labelLimit = TEXT_LIMITS[fieldLabel(control)];
+  if (labelLimit) return labelLimit;
+
+  if (currentStep() === 2 && workspaceForm()?.contains(control)) {
+    const inputs = markInputs();
+    const index = inputs.indexOf(control);
+    if (index >= 0 && index % 3 === 0) return 50;
+  }
+
+  return control.maxLength > 0 ? control.maxLength : 0;
+}
+
 export default function WorkspaceInputGuard() {
   const [message, setMessage] = useState("");
+  const [stage, setStage] = useState(1);
+  const [portalTarget, setPortalTarget] = useState<HTMLElement | null>(null);
+  const [resetting, setResetting] = useState(false);
   const messageTimer = useRef<number | null>(null);
+
+  const startNewStudent = async () => {
+    if (resetting) return;
+    setResetting(true);
+    setMessage("");
+    try {
+      await persistBlankStudentDraft();
+      window.location.replace("/");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Could not start a new student.");
+      setResetting(false);
+    }
+  };
 
   useEffect(() => {
     const showMessage = (text: string) => {
       setMessage(text);
       if (messageTimer.current) window.clearTimeout(messageTimer.current);
       messageTimer.current = window.setTimeout(() => setMessage(""), 2800);
+    };
+
+    const refreshStage = () => {
+      const nextStage = currentStep();
+      setStage(nextStage);
+      setPortalTarget(nextStage === 3 ? finalizeContent() : null);
+      syncLegacyNewStudentButton();
     };
 
     const applyRules = (control: Element | null) => {
@@ -285,7 +353,48 @@ export default function WorkspaceInputGuard() {
         .forEach((control) => applyRules(control));
     };
 
-    const onFocusIn = (event: FocusEvent) => applyRules(event.target as Element);
+    const onFocusIn = (event: FocusEvent) => {
+      applyRules(event.target as Element);
+      refreshStage();
+    };
+
+    const onBeforeInput = (event: InputEvent) => {
+      const control = event.target;
+      if (!(control instanceof HTMLInputElement || control instanceof HTMLTextAreaElement)) return;
+      applyRules(control);
+
+      if (event.inputType.startsWith("delete") || event.data == null) return;
+      const limit = textLimit(control);
+      if (!limit) return;
+
+      const start = control.selectionStart ?? control.value.length;
+      const end = control.selectionEnd ?? start;
+      const nextLength = control.value.length - (end - start) + event.data.length;
+      if (nextLength <= limit) return;
+
+      event.preventDefault();
+      showMessage(`${control.closest("label")?.querySelector("span")?.textContent?.trim() || "This field"} can contain at most ${limit} characters.`);
+    };
+
+    const onPaste = (event: ClipboardEvent) => {
+      const control = event.target;
+      if (!(control instanceof HTMLInputElement || control instanceof HTMLTextAreaElement)) return;
+      applyRules(control);
+
+      const limit = textLimit(control);
+      const pasted = event.clipboardData?.getData("text") || "";
+      if (!limit || !pasted) return;
+
+      const start = control.selectionStart ?? control.value.length;
+      const end = control.selectionEnd ?? start;
+      const available = Math.max(0, limit - (control.value.length - (end - start)));
+      if (pasted.length <= available) return;
+
+      event.preventDefault();
+      const nextValue = `${control.value.slice(0, start)}${pasted.slice(0, available)}${control.value.slice(end)}`;
+      setNativeTextValue(control, nextValue);
+      showMessage(`${control.closest("label")?.querySelector("span")?.textContent?.trim() || "This field"} is limited to ${limit} characters.`);
+    };
 
     const onInput = (event: Event) => {
       const control = event.target;
@@ -293,16 +402,19 @@ export default function WorkspaceInputGuard() {
       control.setCustomValidity("");
       applyRules(control);
 
-      if (control.maxLength > 0 && control.value.length > control.maxLength) {
-        control.value = control.value.slice(0, control.maxLength);
+      const limit = textLimit(control);
+      if (limit && control.value.length > limit) {
+        setNativeTextValue(control, control.value.slice(0, limit));
+        showMessage(`${control.closest("label")?.querySelector("span")?.textContent?.trim() || "This field"} is limited to ${limit} characters.`);
+        return;
       }
 
       if (control instanceof HTMLInputElement && control.type === "number" && control.value !== "") {
         const value = Number(control.value);
         const min = control.min === "" ? -Infinity : Number(control.min);
         const max = control.max === "" ? Infinity : Number(control.max);
-        if (Number.isFinite(value) && value > max) control.value = String(max);
-        if (Number.isFinite(value) && value < min) control.value = String(min);
+        if (Number.isFinite(value) && value > max) setNativeInputValue(control, String(max));
+        else if (Number.isFinite(value) && value < min) setNativeInputValue(control, String(min));
       }
     };
 
@@ -348,12 +460,20 @@ export default function WorkspaceInputGuard() {
 
         window.setTimeout(() => {
           void persistBlankStudentDraft().then(() => {
-            if (new URL(window.location.href).searchParams.has("edit")) window.location.replace("/");
+            window.location.replace("/");
           });
         }, 450);
       }
 
-      window.requestAnimationFrame(applyVisibleRules);
+      if (/^(?:Save to this browser|Update browser save)$/i.test(text)) {
+        window.setTimeout(syncLegacyNewStudentButton, 100);
+        window.setTimeout(syncLegacyNewStudentButton, 450);
+      }
+
+      window.requestAnimationFrame(() => {
+        applyVisibleRules();
+        refreshStage();
+      });
     };
 
     const onChange = (event: Event) => {
@@ -368,29 +488,56 @@ export default function WorkspaceInputGuard() {
       showMessage("Image files must be 5 MB or smaller.");
     };
 
+    const media = window.matchMedia("(max-width: 767px)");
+    const onViewportChange = () => syncLegacyNewStudentButton();
+
     applyVisibleRules();
+    refreshStage();
     document.addEventListener("focusin", onFocusIn);
+    document.addEventListener("beforeinput", onBeforeInput as EventListener, true);
+    document.addEventListener("paste", onPaste as EventListener, true);
     document.addEventListener("input", onInput, true);
     document.addEventListener("change", onChange, true);
     document.addEventListener("click", onClick, true);
+    media.addEventListener("change", onViewportChange);
 
     return () => {
       document.removeEventListener("focusin", onFocusIn);
+      document.removeEventListener("beforeinput", onBeforeInput as EventListener, true);
+      document.removeEventListener("paste", onPaste as EventListener, true);
       document.removeEventListener("input", onInput, true);
       document.removeEventListener("change", onChange, true);
       document.removeEventListener("click", onClick, true);
+      media.removeEventListener("change", onViewportChange);
       if (messageTimer.current) window.clearTimeout(messageTimer.current);
     };
   }, []);
 
-  if (!message) return null;
-
   return (
-    <div
-      className="no-print fixed left-1/2 top-[78px] z-[250] w-[min(92vw,460px)] -translate-x-1/2 border border-amber-200 bg-amber-50 px-4 py-3 text-center text-xs font-black text-amber-800 shadow-xl"
-      role="status"
-    >
-      {message}
-    </div>
+    <>
+      {message && (
+        <div
+          className="no-print fixed left-1/2 top-[78px] z-[250] w-[min(92vw,460px)] -translate-x-1/2 border border-amber-200 bg-amber-50 px-4 py-3 text-center text-xs font-black text-amber-800 shadow-xl"
+          role="status"
+        >
+          {message}
+        </div>
+      )}
+
+      {stage === 3 && portalTarget
+        ? createPortal(
+            <button
+              type="button"
+              onClick={startNewStudent}
+              disabled={resetting}
+              className="no-print flex w-full items-center justify-center gap-2 border border-[#0F4AA8] bg-white px-4 py-3 text-sm font-black text-[#0F4AA8] disabled:cursor-wait disabled:opacity-60 md:hidden"
+            >
+              <span aria-hidden="true" className="text-base leading-none">+</span>
+              {resetting ? "Starting new student…" : "Add new student"}
+            </button>,
+            portalTarget,
+          )
+        : null}
+    </>
   );
 }
