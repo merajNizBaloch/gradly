@@ -4,8 +4,10 @@ export const LOCAL_RESULTS_KEY = "gradly-local-results-v1";
 export const LOCAL_DRAFT_KEY = "gradly-local-draft-v1";
 
 const DB_NAME = "gradly-offline-db";
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 const RESULTS_STORE = "results";
+const DRAFTS_STORE = "drafts";
+const CURRENT_DRAFT_ID = "current";
 const MIGRATION_FLAG = "gradly-results-migrated-to-idb-v1";
 let migrationChecked = false;
 
@@ -42,7 +44,14 @@ export type LocalResult = {
   totals: ResultTotals;
 };
 
-export type LocalDraft = Omit<LocalResult, "report_id" | "created_at" | "updated_at" | "totals">;
+export type LocalDraft = Omit<LocalResult, "report_id" | "created_at" | "updated_at" | "totals"> & {
+  editingReportId?: string;
+};
+
+type StoredDraft = LocalDraft & {
+  id: string;
+  updated_at: string;
+};
 
 function browserStorage() {
   return typeof window === "undefined" ? null : window.localStorage;
@@ -54,6 +63,15 @@ function normalizeResult(result: LocalResult): LocalResult {
     photo: result.photo || "",
     teacherSignature: result.teacherSignature || "",
     principalSignature: result.principalSignature || "",
+  };
+}
+
+function normalizeDraft(draft: LocalDraft): LocalDraft {
+  return {
+    ...draft,
+    photo: draft.photo || "",
+    teacherSignature: draft.teacherSignature || "",
+    principalSignature: draft.principalSignature || "",
   };
 }
 
@@ -71,6 +89,9 @@ function openDb(): Promise<IDBDatabase> {
       if (!db.objectStoreNames.contains(RESULTS_STORE)) {
         const store = db.createObjectStore(RESULTS_STORE, { keyPath: "report_id" });
         store.createIndex("updated_at", "updated_at", { unique: false });
+      }
+      if (!db.objectStoreNames.contains(DRAFTS_STORE)) {
+        db.createObjectStore(DRAFTS_STORE, { keyPath: "id" });
       }
     };
 
@@ -122,12 +143,46 @@ async function migrateLegacyLocalStorageResults() {
       db.close();
     }
 
-    // Delete the Base64-heavy legacy archive only after IndexedDB migration succeeds.
     storage.removeItem(LOCAL_RESULTS_KEY);
     try { storage.setItem(MIGRATION_FLAG, "yes"); } catch {}
   } catch {
-    // Keep legacy data untouched if migration cannot complete. A later page load can retry.
     migrationChecked = false;
+  }
+}
+
+async function migrateLegacyDraftIfNeeded() {
+  const storage = browserStorage();
+  if (!storage) return;
+
+  const legacyRaw = storage.getItem(LOCAL_DRAFT_KEY);
+  if (!legacyRaw) return;
+
+  try {
+    const parsed = JSON.parse(legacyRaw);
+    if (!parsed || typeof parsed !== "object") {
+      storage.removeItem(LOCAL_DRAFT_KEY);
+      return;
+    }
+
+    const db = await openDb();
+    try {
+      const transaction = db.transaction(DRAFTS_STORE, "readwrite");
+      const store = transaction.objectStore(DRAFTS_STORE);
+      const current = await requestToPromise(store.get(CURRENT_DRAFT_ID));
+      if (!current) {
+        store.put({
+          id: CURRENT_DRAFT_ID,
+          updated_at: new Date().toISOString(),
+          ...normalizeDraft(parsed as LocalDraft),
+        } satisfies StoredDraft);
+      }
+      await transactionDone(transaction);
+      storage.removeItem(LOCAL_DRAFT_KEY);
+    } finally {
+      db.close();
+    }
+  } catch {
+    // Keep the legacy draft if migration fails so text data is not lost.
   }
 }
 
@@ -204,42 +259,45 @@ export async function deleteLocalResult(reportId: string) {
   window.dispatchEvent(new CustomEvent("gradly-local-results-changed"));
 }
 
-export function saveLocalDraft(draft: LocalDraft) {
-  const storage = browserStorage();
-  if (!storage) return;
-
-  // Keep the auto-draft lightweight. Photos and signature images are persisted with explicit IndexedDB saves.
-  const lightweightDraft: LocalDraft = {
-    ...draft,
-    photo: "",
-    teacherSignature: "",
-    principalSignature: "",
-  };
-
+export async function saveLocalDraft(draft: LocalDraft) {
+  const db = await openDb();
   try {
-    storage.setItem(LOCAL_DRAFT_KEY, JSON.stringify(lightweightDraft));
+    const transaction = db.transaction(DRAFTS_STORE, "readwrite");
+    transaction.objectStore(DRAFTS_STORE).put({
+      id: CURRENT_DRAFT_ID,
+      updated_at: new Date().toISOString(),
+      ...normalizeDraft(draft),
+    } satisfies StoredDraft);
+    await transactionDone(transaction);
   } catch {
-    // Draft persistence is best-effort; full saved records use IndexedDB instead.
+    // Draft persistence is best-effort and should never interrupt typing.
+  } finally {
+    db.close();
   }
 }
 
-export function readLocalDraft(): LocalDraft | null {
-  const storage = browserStorage();
-  if (!storage) return null;
+export async function readLocalDraft(): Promise<LocalDraft | null> {
+  await migrateLegacyDraftIfNeeded();
+  const db = await openDb();
   try {
-    const parsed = JSON.parse(storage.getItem(LOCAL_DRAFT_KEY) || "null");
-    if (!parsed || typeof parsed !== "object") return null;
-    return {
-      ...(parsed as LocalDraft),
-      photo: "",
-      teacherSignature: "",
-      principalSignature: "",
-    };
-  } catch {
-    return null;
+    const transaction = db.transaction(DRAFTS_STORE, "readonly");
+    const stored = await requestToPromise(transaction.objectStore(DRAFTS_STORE).get(CURRENT_DRAFT_ID));
+    if (!stored) return null;
+    const { id: _id, updated_at: _updatedAt, ...draft } = stored as StoredDraft;
+    return normalizeDraft(draft);
+  } finally {
+    db.close();
   }
 }
 
-export function clearLocalDraft() {
+export async function clearLocalDraft() {
   browserStorage()?.removeItem(LOCAL_DRAFT_KEY);
+  const db = await openDb();
+  try {
+    const transaction = db.transaction(DRAFTS_STORE, "readwrite");
+    transaction.objectStore(DRAFTS_STORE).delete(CURRENT_DRAFT_ID);
+    await transactionDone(transaction);
+  } finally {
+    db.close();
+  }
 }
