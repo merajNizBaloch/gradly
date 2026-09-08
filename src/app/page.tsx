@@ -1,7 +1,7 @@
 "use client";
 
-import GradlyWorkspaceLocal from "./components/gradly-workspace-local";
+import GradlyWorkspace from "./components/gradly-workspace";
 
 export default function Home() {
-  return <GradlyWorkspaceLocal />;
+  return <GradlyWorkspace />;
 }
