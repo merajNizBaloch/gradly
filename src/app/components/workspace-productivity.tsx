@@ -24,16 +24,6 @@ const PLACEHOLDERS: Record<string, string> = {
   exam: "e.g. Annual Examination",
 };
 
-const FRESH_TEXT_FIELDS = [
-  "student name",
-  "father / guardian",
-  "roll number",
-  "class & section",
-  "session",
-  "exam",
-  "date of birth",
-] as const;
-
 function safeJson<T extends object>(key: string, fallback: T): T {
   try {
     const parsed = JSON.parse(localStorage.getItem(key) || "null");
@@ -56,35 +46,11 @@ function findField(labelText: string) {
   return label?.querySelector<HTMLInputElement>("input") || null;
 }
 
-function setReactInput(input: HTMLInputElement, value: string) {
-  const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
-  setter?.call(input, value);
-  input.dispatchEvent(new Event("input", { bubbles: true }));
-}
-
 function applyPlaceholders() {
   for (const [label, placeholder] of Object.entries(PLACEHOLDERS)) {
     const input = findField(label);
     if (input && !input.placeholder) input.placeholder = placeholder;
   }
-}
-
-function clearFreshDemoForm() {
-  const form = workspaceForm();
-  if (!form) return false;
-
-  for (const label of FRESH_TEXT_FIELDS) {
-    const input = findField(label);
-    if (input && input.value) setReactInput(input, "");
-  }
-
-  const attendance = findField("attendance %");
-  if (attendance && attendance.value !== "0") setReactInput(attendance, "0");
-  const position = findField("class position");
-  if (position && position.value !== "0") setReactInput(position, "0");
-
-  applyPlaceholders();
-  return true;
 }
 
 function blankInitialDraft(): LocalDraft {
@@ -198,29 +164,20 @@ function isStudentPhotoInput(input: HTMLInputElement) {
 }
 
 export default function WorkspaceProductivity() {
-  const firstRunRef = useRef(false);
   const resettingRef = useRef(false);
 
   useEffect(() => {
     let active = true;
-    const timers: number[] = [];
+    const placeholderTimer = window.setTimeout(applyPlaceholders, 500);
 
+    // A browser with no active draft should begin with a genuinely blank result,
+    // not the internal demo values used by the workspace component.
     void readLocalDraft().then(async (draft) => {
       if (!active) return;
       const editing = new URL(window.location.href).searchParams.has("edit");
       if (draft || editing) return;
-
-      firstRunRef.current = true;
       await saveLocalDraft(blankInitialDraft());
-      if (!active) return;
-
-      // A few finite attempts cover IndexedDB hydration without adding a polling loop.
-      for (const delay of [80, 280, 700]) {
-        timers.push(window.setTimeout(() => {
-          if (!active || !firstRunRef.current) return;
-          clearFreshDemoForm();
-        }, delay));
-      }
+      if (active) window.location.replace("/");
     });
 
     const onFocusIn = () => applyPlaceholders();
@@ -240,6 +197,7 @@ export default function WorkspaceProductivity() {
         }
       }
 
+      // Own the reset before the older document-level helper sees the click.
       event.preventDefault();
       event.stopPropagation();
       event.stopImmediatePropagation();
@@ -279,7 +237,7 @@ export default function WorkspaceProductivity() {
           input.dispatchEvent(new Event("change", { bubbles: true }));
         })
         .catch(() => {
-          // If optimization fails, pass the original image through the normal React handler.
+          // If optimization fails, pass the original image through normally.
           const transfer = new DataTransfer();
           transfer.items.add(file);
           input.files = transfer.files;
@@ -289,16 +247,15 @@ export default function WorkspaceProductivity() {
     };
 
     document.addEventListener("focusin", onFocusIn);
-    document.addEventListener("click", onClick, true);
-    document.addEventListener("change", onChange, true);
-    timers.push(window.setTimeout(applyPlaceholders, 500));
+    window.addEventListener("click", onClick, true);
+    window.addEventListener("change", onChange, true);
 
     return () => {
       active = false;
+      window.clearTimeout(placeholderTimer);
       document.removeEventListener("focusin", onFocusIn);
-      document.removeEventListener("click", onClick, true);
-      document.removeEventListener("change", onChange, true);
-      for (const timer of timers) window.clearTimeout(timer);
+      window.removeEventListener("click", onClick, true);
+      window.removeEventListener("change", onChange, true);
     };
   }, []);
 
