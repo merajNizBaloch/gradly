@@ -40,6 +40,14 @@
     font-size: 16px !important;
   }
 
+  button,
+  a,
+  input,
+  textarea,
+  select {
+    touch-action: manipulation;
+  }
+
   /* Compact top bar: keep all actions reachable without wrapping. */
   main > header.no-print > div:nth-child(2) {
     min-height: 60px !important;
@@ -170,22 +178,80 @@
     font-size: 14px !important;
   }
 
-  /* Grading editor modal fits narrow screens without horizontal clipping. */
-  main > .no-print.fixed.inset-0 {
+  /* Grading editor is a bottom sheet on phones. */
+  main > div[class*="z-[160]"] {
     align-items: end !important;
     padding: 0 !important;
   }
 
-  main > .no-print.fixed.inset-0 > div {
+  main > div[class*="z-[160]"] > div {
     width: 100% !important;
+    max-width: none !important;
     max-height: 94dvh !important;
     overflow-y: auto !important;
     padding: 16px !important;
   }
 
-  main > .no-print.fixed.inset-0 [class*="grid-cols-[70px_80px_1fr]"] {
+  main > div[class*="z-[160]"] [class*="grid-cols-[70px_80px_1fr]"] {
     grid-template-columns: 52px 62px minmax(0, 1fr) !important;
     gap: 6px !important;
+  }
+
+  /* School settings becomes a near-full-screen mobile sheet, while its desktop modal is unchanged. */
+  main > div[class*="z-[150]"] {
+    align-items: end !important;
+    padding: 0 !important;
+  }
+
+  main > div[class*="z-[150]"] > div {
+    width: 100% !important;
+    max-width: none !important;
+    max-height: 96dvh !important;
+    border-left: 0 !important;
+    border-right: 0 !important;
+  }
+
+  main > div[class*="z-[150]"] > div > div:first-child,
+  main > div[class*="z-[150]"] > div > div:last-child {
+    padding: 12px 14px !important;
+  }
+
+  main > div[class*="z-[150]"] > div > div:nth-child(2) > div {
+    padding: 14px !important;
+  }
+
+  main > div[class*="z-[150]"] h2 {
+    font-size: 18px !important;
+  }
+
+  main > div[class*="z-[150]"] input,
+  main > div[class*="z-[150]"] button,
+  main > div[class*="z-[150]"] label {
+    min-height: 44px;
+  }
+
+  /* Design picker is a bottom sheet instead of a narrow anchored popover. */
+  main > header.no-print + div > section:not(.no-print) div[class*="z-[120]"] {
+    position: fixed !important;
+    left: 8px !important;
+    right: 8px !important;
+    bottom: 8px !important;
+    top: auto !important;
+    width: auto !important;
+    max-height: 92dvh !important;
+  }
+
+  main > header.no-print + div > section:not(.no-print) div[class*="z-[120]"] > div:nth-child(2) {
+    max-height: 66dvh !important;
+    padding: 12px !important;
+  }
+
+  main > header.no-print + div > section:not(.no-print) div[class*="z-[120]"] .grid.grid-cols-5 {
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  }
+
+  main > header.no-print + div > section:not(.no-print) div[class*="z-[120]"] button {
+    min-height: 42px;
   }
 
   /* Full-card mobile preview: scale the actual paper frame to the available width. */
@@ -233,7 +299,38 @@
     box-shadow: 0 10px 28px rgba(20, 36, 58, .16) !important;
   }
 
+  /* Saved-result download dialog is also a bottom sheet. */
+  body > div[class*="z-[220]"],
+  main > div[class*="z-[220]"] {
+    align-items: end !important;
+    padding: 0 !important;
+  }
+
+  body > div[class*="z-[220]"] > div,
+  main > div[class*="z-[220]"] > div {
+    width: 100% !important;
+    max-width: none !important;
+    max-height: 92dvh !important;
+    overflow-y: auto !important;
+  }
+
   /* Results archive: replace the 980px desktop table with stacked result cards. */
+  main > header:not(.no-print) > div:nth-child(2) {
+    gap: 8px !important;
+    padding-left: 10px !important;
+    padding-right: 10px !important;
+  }
+
+  main > header:not(.no-print) > div:nth-child(2) img {
+    width: 38px !important;
+    height: 38px !important;
+  }
+
+  main > header:not(.no-print) > div:nth-child(2) a,
+  main > header:not(.no-print) > div:nth-child(2) button {
+    min-height: 42px !important;
+  }
+
   main > header:not(.no-print) + div {
     padding: 16px 10px !important;
   }
@@ -294,5 +391,13 @@
   main > header:not(.no-print) + div table tbody td:last-child button {
     min-height: 42px !important;
     justify-content: center !important;
+  }
+
+  /* Keep the TechCraft badge from covering mobile form actions. */
+  footer.no-print {
+    right: 7px !important;
+    bottom: 7px !important;
+    transform: scale(.88);
+    transform-origin: bottom right;
   }
 }
