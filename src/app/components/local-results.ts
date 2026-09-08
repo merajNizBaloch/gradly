@@ -31,6 +31,8 @@ export type LocalResult = {
   bands: Band[];
   teacherRemarks: string;
   principalRemarks: string;
+  teacherSignature?: string;
+  principalSignature?: string;
   totals: ResultTotals;
 };
 
@@ -54,6 +56,11 @@ export function readLocalResults(): LocalResult[] {
     if (!Array.isArray(parsed)) return [];
     return parsed
       .filter((item): item is LocalResult => Boolean(item && typeof item.report_id === "string"))
+      .map((item) => ({
+        ...item,
+        teacherSignature: item.teacherSignature || "",
+        principalSignature: item.principalSignature || "",
+      }))
       .sort((a, b) => new Date(b.updated_at || b.created_at).getTime() - new Date(a.updated_at || a.created_at).getTime());
   } catch {
     return [];
@@ -81,7 +88,7 @@ export function saveLocalResult(result: LocalResult) {
     storage.setItem(LOCAL_RESULTS_KEY, JSON.stringify(next));
   } catch (error) {
     if (error instanceof DOMException && error.name === "QuotaExceededError") {
-      throw new Error("Browser storage is full. Remove older saved results or use a smaller student photo.");
+      throw new Error("Browser storage is full. Remove older saved results or use smaller student/signature images.");
     }
     throw error;
   }
@@ -112,7 +119,12 @@ export function readLocalDraft(): LocalDraft | null {
   if (!storage) return null;
   try {
     const parsed = JSON.parse(storage.getItem(LOCAL_DRAFT_KEY) || "null");
-    return parsed && typeof parsed === "object" ? parsed as LocalDraft : null;
+    if (!parsed || typeof parsed !== "object") return null;
+    return {
+      ...(parsed as LocalDraft),
+      teacherSignature: (parsed as LocalDraft).teacherSignature || "",
+      principalSignature: (parsed as LocalDraft).principalSignature || "",
+    };
   } catch {
     return null;
   }
