@@ -1,7 +1,7 @@
 "use client";
 
 import { QRCodeSVG } from "qrcode.react";
-import { allThemes, autoRemark, getGrade, paperPresets, templates, type Band, type DesignSettings, type SchoolSettings, type Subject } from "./workspace-model";
+import { allThemes, autoRemark, getGrade, paperPresets, type Band, type DesignSettings, type SchoolSettings, type Subject } from "./workspace-model";
 
 export default function ResultCard({
   school,
@@ -46,7 +46,6 @@ export default function ResultCard({
   const status = subjects.length > 0 && subjects.every((subject) => subject.total > 0 && (subject.obtained / subject.total) * 100 >= 40) ? "PASS" : "FAIL";
   const grade = getGrade(percent, bands);
   const activeTheme = allThemes.find((item) => item.id === design.theme) || allThemes[0];
-  const activeTemplate = templates.find((item) => item.id === design.template) || templates[0];
   const paper = design.paperSize === "custom"
     ? { label: "Custom", width: `${Math.max(80, Number(design.customWidth) || 210)}mm`, height: `${Math.max(100, Number(design.customHeight) || 297)}mm`, ratio: Math.max(100, Number(design.customHeight) || 297) / Math.max(80, Number(design.customWidth) || 210) }
     : paperPresets[design.paperSize];
@@ -67,8 +66,15 @@ export default function ResultCard({
         .gradly-card-scroll::-webkit-scrollbar-track{background:#dfe4e9}
         .gradly-card-scroll::-webkit-scrollbar-thumb{background:#9fb4c9;border:2px solid #dfe4e9;border-radius:999px}
         .gradly-card-scroll::-webkit-scrollbar-thumb:hover{background:#7897b5}
-        .gradly-paper{width:${paper.width};min-height:${paper.height};aspect-ratio:${paper.ratio};box-sizing:border-box;transition:opacity .22s ease,transform .22s ease,box-shadow .22s ease}
-        @media print{html,body{width:${paper.width};min-height:${paper.height};margin:0!important;padding:0!important;background:#fff!important}.gradly-card-scroll{height:auto!important;overflow:visible!important;padding:0!important;background:#fff!important}.gradly-paper{width:${paper.width}!important;height:${paper.height}!important;min-height:${paper.height}!important;aspect-ratio:auto!important;box-shadow:none!important}.print-shell{display:block!important;padding:0!important;margin:0!important}.no-print{display:none!important}}
+        .gradly-paper{width:${paper.width};min-height:${paper.height};aspect-ratio:${paper.ratio};box-sizing:border-box;transition:opacity .22s ease,transform .22s ease,box-shadow .22s ease;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+        .gradly-paper,.gradly-paper *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}
+        @media print{
+          html,body{width:${paper.width};min-height:${paper.height};margin:0!important;padding:0!important;background:#fff!important;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}
+          .gradly-card-scroll{height:auto!important;overflow:visible!important;padding:0!important;background:#fff!important}
+          .gradly-paper{width:${paper.width}!important;height:${paper.height}!important;min-height:${paper.height}!important;aspect-ratio:auto!important;box-shadow:none!important}
+          .print-shell{display:block!important;padding:0!important;margin:0!important}
+          .no-print{display:none!important}
+        }
       `}</style>
 
       <div className="flex min-w-max justify-center pb-4">
@@ -85,52 +91,51 @@ export default function ResultCard({
               </div>
               <div className="min-w-0 flex-1 text-center">
                 <h1 className={`${executive ? "font-sans tracking-[.12em] uppercase" : "font-serif"} text-2xl font-bold`} style={{ color: activeTheme.ink }}>{school.name}</h1>
-                <p className="mt-1 text-xs italic text-slate-500">{school.motto}</p>
-                <p className="mt-1 text-[10px] text-slate-400">{school.address} · {school.contact}</p>
-                <div className="mt-3 inline-flex rounded-full px-3 py-1 text-[10px] font-black uppercase tracking-[.16em]" style={{ backgroundColor: activeTheme.wash, color: activeTheme.ink }}>{exam}</div>
+                <p className="mt-1 text-sm italic text-slate-600">{school.motto}</p>
+                <p className="mt-1 text-[11px] font-medium text-slate-500">{school.address} · {school.contact}</p>
+                <div className="mt-3 inline-flex rounded-full px-3 py-1.5 text-[11px] font-black uppercase tracking-[.12em]" style={{ backgroundColor: activeTheme.wash, color: activeTheme.ink }}>{exam}</div>
               </div>
               {photo ? <img src={photo} alt="Student" className="h-24 w-20 rounded-lg border object-cover" style={{ borderColor: activeTheme.ink }} /> : <div className="h-24 w-20 rounded-lg border bg-slate-50" style={{ borderColor: activeTheme.ink }} />}
             </div>
 
-            <div className={`mt-6 grid grid-cols-2 gap-x-8 gap-y-3 text-[11px] ${modern ? "rounded-2xl p-4" : ""}`} style={modern ? { backgroundColor: activeTheme.wash } : undefined}>
+            <div className={`mt-6 grid grid-cols-2 gap-x-8 gap-y-3 text-[12px] ${modern ? "rounded-2xl p-4" : ""}`} style={modern ? { backgroundColor: activeTheme.wash } : undefined}>
               {[
                 ["Student", student], ["Father / Guardian", father], ["Roll No.", roll], ["Class", klass], ["Session", session], ["Date of Birth", dob || "—"],
-              ].map(([label, value]) => <div key={label} className="flex items-center justify-between gap-3 border-b border-slate-100 pb-2"><span className="font-bold text-slate-400">{label}</span><span className="text-right font-black text-slate-700">{value || "—"}</span></div>)}
+              ].map(([label, value]) => <div key={label} className="flex items-center justify-between gap-3 border-b border-slate-200 pb-2"><span className="font-bold text-slate-500">{label}</span><span className="text-right font-black text-slate-800">{value || "—"}</span></div>)}
             </div>
 
             <div className="mt-6 overflow-hidden rounded-xl border" style={{ borderColor: activeTheme.ink }}>
-              <table className="w-full border-collapse text-[10px]">
-                <thead><tr style={{ backgroundColor: activeTheme.ink, color: "white" }}><th className="px-3 py-2.5 text-left">Subject</th><th className="px-3 py-2.5 text-center">Max</th><th className="px-3 py-2.5 text-center">Obt.</th><th className="px-3 py-2.5 text-center">%</th><th className="px-3 py-2.5 text-center">Grade</th></tr></thead>
-                <tbody>{subjects.map((subject) => { const p = subject.total ? (subject.obtained / subject.total) * 100 : 0; return <tr key={subject.id} className="border-t border-slate-100"><td className="px-3 py-2.5 font-semibold text-slate-700">{subject.name}</td><td className="px-3 py-2.5 text-center text-slate-500">{subject.total}</td><td className="px-3 py-2.5 text-center font-black text-slate-700">{subject.obtained}</td><td className="px-3 py-2.5 text-center text-slate-500">{p.toFixed(1)}</td><td className="px-3 py-2.5 text-center font-black" style={{ color: activeTheme.ink }}>{getGrade(p, bands)}</td></tr>; })}</tbody>
+              <table className="w-full border-collapse text-[11px]">
+                <thead><tr style={{ backgroundColor: activeTheme.ink, color: "white" }}><th className="px-3 py-3 text-left">Subject</th><th className="px-3 py-3 text-center">Max</th><th className="px-3 py-3 text-center">Obt.</th><th className="px-3 py-3 text-center">%</th><th className="px-3 py-3 text-center">Grade</th></tr></thead>
+                <tbody>{subjects.map((subject) => { const p = subject.total ? (subject.obtained / subject.total) * 100 : 0; return <tr key={subject.id} className="border-t border-slate-200"><td className="px-3 py-3 font-semibold text-slate-800">{subject.name}</td><td className="px-3 py-3 text-center text-slate-600">{subject.total}</td><td className="px-3 py-3 text-center font-black text-slate-800">{subject.obtained}</td><td className="px-3 py-3 text-center text-slate-600">{p.toFixed(1)}</td><td className="px-3 py-3 text-center font-black" style={{ color: activeTheme.ink }}>{getGrade(p, bands)}</td></tr>; })}</tbody>
               </table>
             </div>
 
-            <div className={`mt-6 grid grid-cols-4 gap-2 ${minimal ? "text-[10px]" : ""}`}>
-              {[["Obtained", `${obtained}/${total}`], ["Percentage", `${percent.toFixed(1)}%`], ["Grade", grade], ["Result", status]].map(([label, value]) => <div key={label} className="rounded-xl border p-3 text-center" style={{ borderColor: activeTheme.ink, backgroundColor: activeTheme.wash }}><p className="text-[8px] font-black uppercase tracking-[.14em] text-slate-400">{label}</p><p className="mt-1 text-sm font-black" style={{ color: activeTheme.ink }}>{value}</p></div>)}
+            <div className="mt-6 grid grid-cols-4 gap-2">
+              {[["Obtained", `${obtained}/${total}`], ["Percentage", `${percent.toFixed(1)}%`], ["Grade", grade], ["Result", status]].map(([label, value]) => <div key={label} className="rounded-xl border p-3 text-center" style={{ borderColor: activeTheme.ink, backgroundColor: activeTheme.wash }}><p className="text-[9px] font-black uppercase tracking-[.12em] text-slate-500">{label}</p><p className="mt-1 text-base font-black" style={{ color: activeTheme.ink }}>{value}</p></div>)}
             </div>
 
             <div className="mt-6 grid grid-cols-[1fr_auto] gap-5 rounded-xl border p-4" style={{ borderColor: activeTheme.ink, backgroundColor: activeTheme.wash }}>
               <div>
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <p className="text-[8px] font-black uppercase tracking-[.14em] text-slate-400">Teacher remarks</p>
-                    <p className="mt-2 text-[10px] leading-5 text-slate-600">{resolvedTeacherRemarks}</p>
+                    <p className="text-[9px] font-black uppercase tracking-[.12em] text-slate-500">Teacher remarks</p>
+                    <p className="mt-2 text-[11px] font-medium leading-5 text-slate-700">{resolvedTeacherRemarks}</p>
                   </div>
                   <div className="border-l pl-4" style={{ borderColor: activeTheme.accent }}>
-                    <p className="text-[8px] font-black uppercase tracking-[.14em] text-slate-400">Principal remarks</p>
-                    <p className="mt-2 text-[10px] leading-5 text-slate-600">{resolvedPrincipalRemarks || "—"}</p>
+                    <p className="text-[9px] font-black uppercase tracking-[.12em] text-slate-500">Principal remarks</p>
+                    <p className="mt-2 text-[11px] font-medium leading-5 text-slate-700">{resolvedPrincipalRemarks || "—"}</p>
                   </div>
                 </div>
-                <div className="mt-4 flex gap-6 border-t pt-3 text-[10px] text-slate-500" style={{ borderColor: activeTheme.accent }}><span>Attendance: <strong>{attendance}%</strong></span><span>Position: <strong>{position || "—"}</strong></span></div>
+                <div className="mt-4 flex gap-6 border-t pt-3 text-[11px] text-slate-600" style={{ borderColor: activeTheme.accent }}><span>Attendance: <strong>{attendance}%</strong></span><span>Position: <strong>{position || "—"}</strong></span></div>
               </div>
-              {verificationUrl ? <div className="text-center"><QRCodeSVG value={verificationUrl} size={64} /><p className="mt-1 text-[7px] font-bold text-slate-400">VERIFY</p></div> : null}
+              {verificationUrl ? <div className="text-center"><QRCodeSVG value={verificationUrl} size={68} /><p className="mt-1 text-[9px] font-black text-slate-500">VERIFY</p></div> : null}
             </div>
 
             <div className="mt-auto pt-12">
-              <div className="flex items-end justify-between gap-8 text-[9px] text-slate-400">
-                <div className="w-36 border-t border-slate-400 pt-2 text-center">Class Teacher Signature</div>
-                <div className="text-center"><p className="font-black uppercase tracking-[.18em]" style={{ color: activeTheme.ink }}>{activeTemplate.name} Result Card</p><p className="mt-1">Generated with Gradly</p></div>
-                <div className="w-36 border-t border-slate-400 pt-2 text-center">Principal Signature</div>
+              <div className="flex items-end justify-between gap-8 text-[11px] font-semibold text-slate-600">
+                <div className="w-40 border-t border-slate-500 pt-2 text-center">Class Teacher Signature</div>
+                <div className="w-40 border-t border-slate-500 pt-2 text-center">Principal Signature</div>
               </div>
             </div>
           </div>
