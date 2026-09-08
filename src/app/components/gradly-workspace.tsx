@@ -88,6 +88,7 @@ export default function GradlyWorkspace() {
   const photoRef = useRef<HTMLInputElement>(null);
 
   const [hydrated, setHydrated] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [activeStep, setActiveStep] = useState<StepId>("student");
   const [schoolOpen, setSchoolOpen] = useState(false);
   const [school, setSchool] = useState<SchoolSettings>(defaultSchool);
@@ -135,30 +136,39 @@ export default function GradlyWorkspace() {
   };
 
   useEffect(() => {
-    try {
-      const savedSchool = JSON.parse(localStorage.getItem(SCHOOL_KEY) || "null");
-      const savedDesign = JSON.parse(localStorage.getItem(DESIGN_KEY) || "null");
-      if (savedSchool) setSchool({ ...defaultSchool, ...savedSchool });
-      if (savedDesign) setDesign({ ...defaultDesign, ...savedDesign });
+    let active = true;
 
-      if (editReportId) {
-        const result = getLocalResult(editReportId);
-        if (!result) {
-          setSaveError("This result is not saved in this browser.");
+    (async () => {
+      try {
+        const savedSchool = JSON.parse(localStorage.getItem(SCHOOL_KEY) || "null");
+        const savedDesign = JSON.parse(localStorage.getItem(DESIGN_KEY) || "null");
+        if (savedSchool) setSchool({ ...defaultSchool, ...savedSchool });
+        if (savedDesign) setDesign({ ...defaultDesign, ...savedDesign });
+
+        if (editReportId) {
+          const result = await getLocalResult(editReportId);
+          if (!active) return;
+          if (!result) {
+            setSaveError("This result is not saved in this browser.");
+          } else {
+            setSchool(result.school);
+            setDesign(result.design);
+            applyDraft(result);
+            setSavedId(result.report_id);
+            setSaveMessage("Loaded from this browser database.");
+          }
         } else {
-          setSchool(result.school);
-          setDesign(result.design);
-          applyDraft(result);
-          setSavedId(result.report_id);
-          setSaveMessage("Loaded from this browser.");
+          const draft = readLocalDraft();
+          if (draft && active) applyDraft(draft);
         }
-      } else {
-        const draft = readLocalDraft();
-        if (draft) applyDraft(draft);
+      } catch (error) {
+        if (active) setSaveError(error instanceof Error ? error.message : "Could not open browser storage.");
+      } finally {
+        if (active) setHydrated(true);
       }
-    } finally {
-      setHydrated(true);
-    }
+    })();
+
+    return () => { active = false; };
   }, [editReportId]);
 
   useEffect(() => {
@@ -200,16 +210,16 @@ export default function GradlyWorkspace() {
     reader.readAsDataURL(file);
   };
 
-  const saveResult = () => {
+  const saveResult = async () => {
+    setSaving(true);
     setSaveError("");
     setSaveMessage("");
     try {
       const now = new Date().toISOString();
       const reportId = savedId || editReportId || createLocalReportId();
-      const existing = getLocalResult(reportId);
-      const saved = saveLocalResult({
+      const saved = await saveLocalResult({
         report_id: reportId,
-        created_at: existing?.created_at || now,
+        created_at: now,
         updated_at: now,
         school,
         design,
@@ -233,9 +243,11 @@ export default function GradlyWorkspace() {
       });
       setSavedId(saved.report_id);
       clearLocalDraft();
-      setSaveMessage("Saved in this browser with remarks and signatures.");
+      setSaveMessage("Saved in IndexedDB on this browser, including photos and signatures.");
     } catch (error) {
       setSaveError(error instanceof Error ? error.message : "Could not save in this browser.");
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -260,7 +272,7 @@ export default function GradlyWorkspace() {
   };
 
   if (!hydrated) {
-    return <main className="grid min-h-screen place-items-center bg-[#F4F8FC]"><div className="border border-[#D8E3F0] bg-white p-7 text-center"><img src="/gradly-logo.svg" alt="Gradly" className="mx-auto h-11 w-11" /><p className="mt-3 text-sm font-bold text-[#0B3477]">Opening Gradly…</p></div></main>;
+    return <main className="grid min-h-screen place-items-center bg-[#F4F8FC]"><div className="border border-[#D8E3F0] bg-white p-7 text-center"><img src="/gradly-logo.svg" alt="Gradly" className="mx-auto h-11 w-11" /><p className="mt-3 text-sm font-bold text-[#0B3477]">Opening Gradly browser database…</p></div></main>;
   }
 
   return (
@@ -299,7 +311,7 @@ export default function GradlyWorkspace() {
           <div className="sticky top-0 z-20 border-b border-[#E4ECF5] bg-white/95 px-5 py-4 backdrop-blur"><p className="text-[9px] font-black uppercase tracking-[.2em] text-[#11B8B2]">Step {currentIndex + 1} of 3</p><h1 className="mt-1 font-serif text-2xl font-bold text-[#0B3477]">{steps[currentIndex].label}</h1><p className="mt-1 text-xs text-slate-400">{steps[currentIndex].description}</p></div>
           <div className="p-5">
             {activeStep === "student" && <div className="space-y-5">
-              <SectionIntro eyebrow="Student record" title="Student & examination" description="This draft is automatically kept in this browser while you work." />
+              <SectionIntro eyebrow="Student record" title="Student & examination" description="Text fields auto-save as a lightweight browser draft while you work." />
               <Field label="Student name" value={student} onChange={setStudent} />
               <Field label="Father / Guardian" value={father} onChange={setFather} />
               <div className="grid grid-cols-2 gap-3"><Field label="Roll number" value={roll} onChange={setRoll} /><Field label="Class & section" value={klass} onChange={setKlass} /></div>
@@ -307,7 +319,7 @@ export default function GradlyWorkspace() {
               <Field label="Date of birth" value={dob} onChange={setDob} type="date" />
               <div className="grid grid-cols-2 gap-3"><Field label="Attendance %" value={String(attendance)} onChange={(v) => setAttendance(Number(v))} type="number" /><Field label="Class position" value={String(position)} onChange={(v) => setPosition(Number(v))} type="number" /></div>
               <input ref={photoRef} type="file" accept="image/*" className="hidden" onChange={(e) => readPhoto(e.target.files?.[0])} />
-              <button type="button" onClick={() => photoRef.current?.click()} className="flex w-full items-center gap-3 border border-dashed border-[#C9D8E7] bg-[#F8FBFF] p-4 text-left"><span className="grid h-12 w-10 place-items-center overflow-hidden border bg-white">{photo ? <img src={photo} alt="Student" className="h-full w-full object-cover" /> : <ImagePlus size={18} />}</span><span><span className="block text-xs font-black text-slate-700">{photo ? "Student photo added" : "Add student photo"}</span><span className="text-[10px] text-slate-400">Stored locally with the result</span></span></button>
+              <button type="button" onClick={() => photoRef.current?.click()} className="flex w-full items-center gap-3 border border-dashed border-[#C9D8E7] bg-[#F8FBFF] p-4 text-left"><span className="grid h-12 w-10 place-items-center overflow-hidden border bg-white">{photo ? <img src={photo} alt="Student" className="h-full w-full object-cover" /> : <ImagePlus size={18} />}</span><span><span className="block text-xs font-black text-slate-700">{photo ? "Student photo added" : "Add student photo"}</span><span className="text-[10px] text-slate-400">Photo is persisted when you save the result</span></span></button>
             </div>}
 
             {activeStep === "marks" && <div className="space-y-5">
@@ -318,14 +330,14 @@ export default function GradlyWorkspace() {
             </div>}
 
             {activeStep === "finalize" && <div className="space-y-5">
-              <SectionIntro eyebrow="Final actions" title="Save or download this result" description="Add remarks and signatures, then save or export the completed result." />
+              <SectionIntro eyebrow="Final actions" title="Save or download this result" description="Add remarks and signatures, then save the complete record into IndexedDB or export it." />
               <div className="grid grid-cols-3 gap-2">{[["Percentage", `${totals.percent.toFixed(1)}%`], ["Grade", totals.grade], ["Result", totals.result]].map(([label, value]) => <div key={label} className="border border-[#D8E3F0] bg-white p-3 text-center"><p className="text-[8px] font-black uppercase text-slate-400">{label}</p><p className="mt-1 text-sm font-black text-[#0F4AA8]">{value}</p></div>)}</div>
               <RemarksFields teacher={teacherRemarks} principal={principalRemarks} onTeacherChange={setTeacherRemarks} onPrincipalChange={setPrincipalRemarks} />
               <SignatureFields teacher={teacherSignature} principal={principalSignature} onTeacherChange={setTeacherSignature} onPrincipalChange={setPrincipalSignature} />
 
               <div className="border border-[#D8E3F0] bg-[#F8FBFF] p-4">
-                <div className="flex items-start gap-3"><HardDrive className="mt-0.5 text-[#0F4AA8]" size={18} /><div><p className="text-xs font-black text-slate-800">Browser save</p><p className="mt-1 text-[10px] leading-4 text-slate-500">No Supabase/database request is made. Saved results stay on this browser until its site data is cleared.</p></div></div>
-                <button type="button" onClick={saveResult} className="mt-3 flex w-full items-center justify-center gap-2 bg-[#0F4AA8] px-4 py-3 text-sm font-black text-white"><HardDrive size={16} /> {savedId ? "Update browser save" : "Save to this browser"}</button>
+                <div className="flex items-start gap-3"><HardDrive className="mt-0.5 text-[#0F4AA8]" size={18} /><div><p className="text-xs font-black text-slate-800">Browser database save</p><p className="mt-1 text-[10px] leading-4 text-slate-500">Saved records, student photos and signatures use IndexedDB on this device. Nothing is sent to Supabase.</p></div></div>
+                <button type="button" onClick={saveResult} disabled={saving} className="mt-3 flex w-full items-center justify-center gap-2 bg-[#0F4AA8] px-4 py-3 text-sm font-black text-white disabled:cursor-wait disabled:opacity-60"><HardDrive size={16} /> {saving ? "Saving…" : savedId ? "Update browser save" : "Save to this browser"}</button>
               </div>
 
               {saveMessage && <div className="border border-emerald-200 bg-emerald-50 px-3 py-2 text-[11px] font-semibold text-emerald-700">{saveMessage}</div>}
