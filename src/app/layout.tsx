@@ -3,7 +3,6 @@ import { Suspense } from "react";
 import "./globals.css";
 import "./sidebar-summary.css";
 import SiteFooter from "./components/site-footer";
-import ResultDownload from "./components/result-download";
 
 export const metadata: Metadata = {
   title: "Gradly — Academic Result Studio",
@@ -16,7 +15,6 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
       <body>
         <Suspense fallback={null}>
           {children}
-          <ResultDownload />
           <SiteFooter />
         </Suspense>
       </body>
