@@ -59,9 +59,9 @@ function SignatureInput({
         onChange={(event) => choose(event.target.files?.[0])}
       />
       <p className="text-[9px] font-black uppercase tracking-[.14em] text-slate-400">{label}</p>
-      <div className="mt-2 flex min-h-16 items-center justify-center border border-dashed border-[#C9D8E7] bg-[#F8FBFF] px-3 py-2">
+      <div className="mt-2 flex min-h-24 items-center justify-center border border-dashed border-[#C9D8E7] bg-[#F8FBFF] px-4 py-3">
         {value ? (
-          <img src={value} alt={label} className="max-h-12 max-w-full object-contain" />
+          <img src={value} alt={label} className="max-h-20 max-w-full object-contain" />
         ) : (
           <span className="text-[10px] font-semibold text-slate-400">No signature added</span>
         )}
