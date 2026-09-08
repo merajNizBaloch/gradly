@@ -3,6 +3,7 @@ import { Suspense } from "react";
 import "./globals.css";
 import "./sidebar-summary.css";
 import "./print-card.css";
+import PrintButtonInterceptor from "./components/print-button-interceptor";
 import SiteFooter from "./components/site-footer";
 
 export const metadata: Metadata = {
@@ -16,6 +17,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
       <body>
         <Suspense fallback={null}>
           {children}
+          <PrintButtonInterceptor />
           <SiteFooter />
         </Suspense>
       </body>
