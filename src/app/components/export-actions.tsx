@@ -2,7 +2,6 @@
 
 import html2canvas from "html2canvas-pro";
 import { Download, FileImage, FileText } from "lucide-react";
-import { jsPDF } from "jspdf";
 import { useState } from "react";
 import type { DesignSettings } from "./workspace-model";
 
@@ -42,11 +41,74 @@ function canvasBlob(canvas: HTMLCanvasElement, type: "image/png" | "image/jpeg",
   });
 }
 
+function concatBytes(...parts: Uint8Array[]) {
+  const length = parts.reduce((sum, part) => sum + part.length, 0);
+  const output = new Uint8Array(length);
+  let offset = 0;
+  for (const part of parts) {
+    output.set(part, offset);
+    offset += part.length;
+  }
+  return output;
+}
+
+function asciiBytes(value: string) {
+  return new TextEncoder().encode(value);
+}
+
+function bytesToArrayBuffer(bytes: Uint8Array): ArrayBuffer {
+  const buffer = new ArrayBuffer(bytes.byteLength);
+  new Uint8Array(buffer).set(bytes);
+  return buffer;
+}
+
+async function createPdfBlob(canvas: HTMLCanvasElement, design: DesignSettings) {
+  const jpegBlob = await canvasBlob(canvas, "image/jpeg", 0.98);
+  const jpegBytes = new Uint8Array(await jpegBlob.arrayBuffer());
+  const page = paperSizeMm(design);
+  const pageWidthPt = page.width * 72 / 25.4;
+  const pageHeightPt = page.height * 72 / 25.4;
+  const content = asciiBytes(`q\n${pageWidthPt} 0 0 ${pageHeightPt} 0 0 cm\n/Im0 Do\nQ\n`);
+  const header = asciiBytes("%PDF-1.4\n%\u00e2\u00e3\u00cf\u00d3\n");
+  const objects = [
+    asciiBytes("1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n"),
+    asciiBytes("2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n"),
+    asciiBytes(`3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${pageWidthPt} ${pageHeightPt}] /Resources << /XObject << /Im0 4 0 R >> >> /Contents 5 0 R >>\nendobj\n`),
+    concatBytes(
+      asciiBytes(`4 0 obj\n<< /Type /XObject /Subtype /Image /Width ${canvas.width} /Height ${canvas.height} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${jpegBytes.length} >>\nstream\n`),
+      jpegBytes,
+      asciiBytes("\nendstream\nendobj\n"),
+    ),
+    concatBytes(
+      asciiBytes(`5 0 obj\n<< /Length ${content.length} >>\nstream\n`),
+      content,
+      asciiBytes("endstream\nendobj\n"),
+    ),
+  ];
+
+  const chunks: Uint8Array[] = [header];
+  const offsets: number[] = [0];
+  let cursor = header.length;
+  objects.forEach((object, index) => {
+    offsets[index + 1] = cursor;
+    chunks.push(object);
+    cursor += object.length;
+  });
+
+  const xrefOffset = cursor;
+  let xref = `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n`;
+  for (let index = 1; index <= objects.length; index += 1) {
+    xref += `${String(offsets[index]).padStart(10, "0")} 00000 n \n`;
+  }
+  const trailer = asciiBytes(`${xref}trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xrefOffset}\n%%EOF\n`);
+  return new Blob([...chunks, trailer].map(bytesToArrayBuffer), { type: "application/pdf" });
+}
+
 async function renderCard() {
   const card = document.querySelector<HTMLElement>(".gradly-paper");
   if (!card) throw new Error("The result card is not ready yet.");
 
-  const canvas = await html2canvas(card, {
+  return html2canvas(card, {
     scale: Math.min(3, Math.max(2, window.devicePixelRatio || 1)),
     useCORS: true,
     allowTaint: false,
@@ -54,7 +116,6 @@ async function renderCard() {
     logging: false,
     imageTimeout: 15000,
   });
-  return canvas;
 }
 
 export default function ExportActions({ student, design }: { student: string; design: DesignSettings }) {
@@ -70,23 +131,11 @@ export default function ExportActions({ student, design }: { student: string; de
 
       if (format === "png") {
         downloadBlob(await canvasBlob(canvas, "image/png"), `${fileName}.png`);
-        return;
-      }
-      if (format === "jpg") {
+      } else if (format === "jpg") {
         downloadBlob(await canvasBlob(canvas, "image/jpeg", 0.95), `${fileName}.jpg`);
-        return;
+      } else {
+        downloadBlob(await createPdfBlob(canvas, design), `${fileName}.pdf`);
       }
-
-      const page = paperSizeMm(design);
-      const pdf = new jsPDF({
-        orientation: page.width > page.height ? "landscape" : "portrait",
-        unit: "mm",
-        format: [page.width, page.height],
-        compress: true,
-      });
-      const image = canvas.toDataURL("image/jpeg", 0.98);
-      pdf.addImage(image, "JPEG", 0, 0, page.width, page.height, undefined, "FAST");
-      pdf.save(`${fileName}.pdf`);
     } catch (value) {
       setError(value instanceof Error ? value.message : "Download failed. Please try again.");
     } finally {
