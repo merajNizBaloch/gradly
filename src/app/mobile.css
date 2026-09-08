@@ -1,11 +1,10 @@
 /* Mobile and tablet refinements only. Desktop (xl and above) is intentionally untouched. */
 
-@media (max-width: 1279px) {
+@media screen and (max-width: 1279px) {
   body {
     overflow-x: hidden;
   }
 
-  /* Main result workspace becomes a comfortable vertical workflow. */
   main > header.no-print + div {
     height: auto !important;
     align-items: start !important;
@@ -32,8 +31,7 @@
   }
 }
 
-@media (max-width: 767px) {
-  /* Prevent iOS from zooming the page when a form control receives focus. */
+@media screen and (max-width: 767px) {
   input,
   textarea,
   select {
@@ -48,7 +46,6 @@
     touch-action: manipulation;
   }
 
-  /* Compact top bar: keep all actions reachable without wrapping. */
   main > header.no-print > div:nth-child(2) {
     min-height: 60px !important;
     gap: 8px !important;
@@ -73,13 +70,19 @@
     justify-content: center;
   }
 
-  /* Phone workspace spacing. */
+  /* Restore the archive action hidden by the desktop class, but keep it icon-only on phones. */
+  main > header.no-print a[href="/results"] {
+    display: flex !important;
+    width: 42px !important;
+    padding: 0 !important;
+    font-size: 0 !important;
+  }
+
   main > header.no-print + div {
     gap: 10px !important;
     padding: 10px !important;
   }
 
-  /* Turn the tall desktop workflow rail into three compact touch tabs. */
   main > header.no-print + div > aside.no-print {
     padding: 8px !important;
     box-shadow: none !important;
@@ -125,7 +128,6 @@
     font-size: 11px !important;
   }
 
-  /* Form panel: use the full phone width and avoid sticky layers under the top bar. */
   main > header.no-print + div > section.no-print {
     min-width: 0 !important;
   }
@@ -148,12 +150,10 @@
     min-height: 44px;
   }
 
-  /* Any fixed two-column input group becomes one column on phones. */
   main > header.no-print + div > section.no-print .grid.grid-cols-2 {
     grid-template-columns: minmax(0, 1fr) !important;
   }
 
-  /* Keep the three small summary metrics compact but readable. */
   main > header.no-print + div > section.no-print .grid.grid-cols-3 {
     gap: 6px !important;
   }
@@ -163,7 +163,6 @@
     padding-right: 7px !important;
   }
 
-  /* Marks rows retain all columns, but use widths that actually fit a phone. */
   main > header.no-print + div > section.no-print [class*="grid-cols-[1fr_62px_62px_32px]"] {
     grid-template-columns: minmax(0, 1fr) 48px 48px 32px !important;
     gap: 5px !important;
@@ -178,7 +177,6 @@
     font-size: 14px !important;
   }
 
-  /* Grading editor is a bottom sheet on phones. */
   main > div[class*="z-[160]"] {
     align-items: end !important;
     padding: 0 !important;
@@ -197,7 +195,6 @@
     gap: 6px !important;
   }
 
-  /* School settings becomes a near-full-screen mobile sheet, while its desktop modal is unchanged. */
   main > div[class*="z-[150]"] {
     align-items: end !important;
     padding: 0 !important;
@@ -230,7 +227,6 @@
     min-height: 44px;
   }
 
-  /* Design picker is a bottom sheet instead of a narrow anchored popover. */
   main > header.no-print + div > section:not(.no-print) div[class*="z-[120]"] {
     position: fixed !important;
     left: 8px !important;
@@ -254,7 +250,6 @@
     min-height: 42px;
   }
 
-  /* Full-card mobile preview: scale the actual paper frame to the available width. */
   main > header.no-print + div > section:not(.no-print) {
     min-height: 0 !important;
     overflow: visible !important;
@@ -299,7 +294,6 @@
     box-shadow: 0 10px 28px rgba(20, 36, 58, .16) !important;
   }
 
-  /* Saved-result download dialog is also a bottom sheet. */
   body > div[class*="z-[220]"],
   main > div[class*="z-[220]"] {
     align-items: end !important;
@@ -314,7 +308,6 @@
     overflow-y: auto !important;
   }
 
-  /* Results archive: replace the 980px desktop table with stacked result cards. */
   main > header:not(.no-print) > div:nth-child(2) {
     gap: 8px !important;
     padding-left: 10px !important;
@@ -336,6 +329,7 @@
   }
 
   main > header:not(.no-print) + div table {
+    display: block !important;
     min-width: 0 !important;
     width: 100% !important;
   }
@@ -393,7 +387,6 @@
     justify-content: center !important;
   }
 
-  /* Keep the TechCraft badge from covering mobile form actions. */
   footer.no-print {
     right: 7px !important;
     bottom: 7px !important;
