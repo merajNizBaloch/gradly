@@ -156,9 +156,7 @@ async function renderCard(targetId: string | undefined, design: DesignSettings) 
       clonedCard.style.setProperty("animation", "none", "important");
       clonedCard.style.setProperty("transition", "none", "important");
 
-      const master = Array.from(clonedCard.children).find(
-        (child): child is HTMLElement => child instanceof clonedDocument.defaultView!.HTMLElement && child.tagName !== "STYLE",
-      );
+      const master = Array.from(clonedCard.children).find((child) => child.tagName !== "STYLE") as HTMLElement | undefined;
 
       if (master) {
         master.style.setProperty("--gradly-paper-scale", String(scale));
