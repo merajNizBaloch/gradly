@@ -70,7 +70,7 @@ function SignatureInput({
         <button
           type="button"
           onClick={() => inputRef.current?.click()}
-          className="flex flex-1 items-center justify-center gap-2 border border-[#D8E3F0] bg-white px-3 py-2 text-[10px] font-black text-[#0F4AA8]"
+          className="flex min-h-11 flex-1 items-center justify-center gap-2 border border-[#D8E3F0] bg-white px-3 py-2 text-[10px] font-black text-[#0F4AA8]"
         >
           <ImagePlus size={13} /> {value ? "Replace" : "Upload"}
         </button>
@@ -78,7 +78,7 @@ function SignatureInput({
           <button
             type="button"
             onClick={() => onChange("")}
-            className="grid w-9 place-items-center border border-rose-100 bg-white text-rose-500"
+            className="grid min-h-11 w-11 place-items-center border border-rose-100 bg-white text-rose-500"
             title={`Remove ${label.toLowerCase()}`}
           >
             <Trash2 size={13} />
@@ -106,7 +106,7 @@ export default function SignatureFields({
         <p className="text-[9px] font-black uppercase tracking-[.16em] text-slate-400">Signatures</p>
         <p className="mt-1 text-[10px] leading-4 text-slate-500">Upload transparent PNGs for the cleanest printed result.</p>
       </div>
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <SignatureInput label="Teacher signature" value={teacher} onChange={onTeacherChange} />
         <SignatureInput label="Principal signature" value={principal} onChange={onPrincipalChange} />
       </div>
