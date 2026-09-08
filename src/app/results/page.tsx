@@ -10,24 +10,36 @@ export default function ResultsPage() {
   const [results, setResults] = useState<LocalResult[]>([]);
   const [query, setQuery] = useState("");
   const [downloadResult, setDownloadResult] = useState<LocalResult | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
 
-  const load = () => setResults(readLocalResults());
+  const load = async () => {
+    setLoading(true);
+    setError("");
+    try {
+      setResults(await readLocalResults());
+    } catch (value) {
+      setError(value instanceof Error ? value.message : "Could not read saved browser results.");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    load();
-    const refresh = () => load();
-    window.addEventListener("storage", refresh);
+    void load();
+    const refresh = () => { void load(); };
     window.addEventListener("gradly-local-results-changed", refresh as EventListener);
-    return () => {
-      window.removeEventListener("storage", refresh);
-      window.removeEventListener("gradly-local-results-changed", refresh as EventListener);
-    };
+    return () => window.removeEventListener("gradly-local-results-changed", refresh as EventListener);
   }, []);
 
-  const remove = (reportId: string) => {
+  const remove = async (reportId: string) => {
     if (!confirm(`Delete ${reportId} from this browser?`)) return;
-    deleteLocalResult(reportId);
-    load();
+    try {
+      await deleteLocalResult(reportId);
+      await load();
+    } catch (value) {
+      setError(value instanceof Error ? value.message : "Could not delete the saved result.");
+    }
   };
 
   const filtered = results.filter((result) =>
@@ -50,7 +62,7 @@ export default function ResultsPage() {
             <div><div className="font-serif text-xl font-bold text-[#0B3477]">Gradly</div><div className="text-[9px] font-black uppercase tracking-[.2em] text-[#11B8B2]">Browser Archive</div></div>
           </div>
           <div className="flex items-center gap-2">
-            <button type="button" onClick={load} className="grid h-10 w-10 place-items-center border border-[#D8E3F0] bg-white text-slate-500" title="Refresh"><RefreshCw size={15} /></button>
+            <button type="button" onClick={() => void load()} className="grid h-10 w-10 place-items-center border border-[#D8E3F0] bg-white text-slate-500" title="Refresh"><RefreshCw size={15} className={loading ? "animate-spin" : ""} /></button>
             <Link href="/" className="flex items-center gap-2 bg-[#0F4AA8] px-4 py-2.5 text-xs font-black text-white"><ArrowLeft size={15} /> New result</Link>
           </div>
         </div>
@@ -62,10 +74,10 @@ export default function ResultsPage() {
             <div className="bg-gradient-to-b from-[#0B3477] to-[#0F4AA8] p-5 text-white shadow-[0_18px_50px_rgba(15,74,168,.16)]">
               <p className="text-[9px] font-black uppercase tracking-[.2em] text-[#6FE1DB]">Local archive</p>
               <h1 className="mt-2 font-serif text-2xl font-bold">Saved results</h1>
-              <p className="mt-2 text-[11px] leading-5 text-white/55">Records, photos, remarks and signatures are stored only in this browser.</p>
+              <p className="mt-2 text-[11px] leading-5 text-white/55">Records, photos, remarks and signatures are stored in IndexedDB on this browser.</p>
               <div className="mt-5 grid grid-cols-2 gap-2"><Metric label="Records" value={String(results.length)} /><Metric label="Passed" value={String(stats.passed)} /><Metric label="Average" value={`${stats.average.toFixed(1)}%`} wide /></div>
             </div>
-            <div className="border border-[#D8E3F0] bg-white p-4"><div className="flex items-center gap-2"><HardDrive size={15} className="text-[#0F4AA8]" /><p className="text-[9px] font-black uppercase tracking-[.16em] text-slate-500">Browser storage</p></div><p className="mt-2 text-[11px] leading-5 text-slate-500">Clearing site data or moving to another browser/device will not carry these records over.</p></div>
+            <div className="border border-[#D8E3F0] bg-white p-4"><div className="flex items-center gap-2"><HardDrive size={15} className="text-[#0F4AA8]" /><p className="text-[9px] font-black uppercase tracking-[.16em] text-slate-500">IndexedDB storage</p></div><p className="mt-2 text-[11px] leading-5 text-slate-500">This gives Gradly much more browser capacity than localStorage while keeping records offline on this device. Clearing site data still removes them.</p></div>
           </aside>
 
           <section className="min-w-0">
@@ -74,7 +86,11 @@ export default function ResultsPage() {
               <div className="relative w-full sm:w-[340px]"><Search className="absolute left-3.5 top-3 text-slate-400" size={16} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search student, school or report ID" className="w-full border border-[#D8E3F0] bg-white py-2.5 pl-10 pr-3 text-sm font-medium outline-none focus:border-[#0F4AA8]" /></div>
             </div>
 
-            {filtered.length === 0 ? (
+            {error && <div className="mb-4 border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-semibold text-rose-700">{error}</div>}
+
+            {loading ? (
+              <div className="border border-[#D8E3F0] bg-white p-14 text-center text-sm font-semibold text-slate-500">Loading browser results…</div>
+            ) : filtered.length === 0 ? (
               <div className="border border-dashed border-[#C9D8E7] bg-white p-14 text-center"><span className="mx-auto grid h-12 w-12 place-items-center bg-[#F2FAFF] text-[#0F4AA8]"><FileText size={22} /></span><p className="mt-4 font-serif text-lg font-bold">No saved browser results</p><p className="mt-1 text-sm text-slate-500">Save a result from Finalize or change your search.</p></div>
             ) : (
               <div className="overflow-hidden border border-[#D8E3F0] bg-white">
@@ -96,7 +112,7 @@ export default function ResultsPage() {
                             <div className="flex justify-end gap-2">
                               <Link href={`/?edit=${encodeURIComponent(result.report_id)}`} className="flex items-center gap-1.5 bg-[#0F4AA8] px-3 py-2 text-[10px] font-black text-white"><Edit3 size={13} /> Edit</Link>
                               <button type="button" onClick={() => setDownloadResult(result)} className="flex items-center gap-1.5 border border-[#D8E3F0] bg-white px-3 py-2 text-[10px] font-black text-[#0F4AA8]"><Download size={13} /> Download</button>
-                              <button type="button" onClick={() => remove(result.report_id)} className="grid h-8 w-8 place-items-center border border-rose-100 bg-white text-rose-500" title="Delete local record"><Trash2 size={13} /></button>
+                              <button type="button" onClick={() => void remove(result.report_id)} className="grid h-8 w-8 place-items-center border border-rose-100 bg-white text-rose-500" title="Delete local record"><Trash2 size={13} /></button>
                             </div>
                           </td>
                         </tr>
