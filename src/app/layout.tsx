@@ -1,12 +1,10 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
 import "./globals.css";
+import "./sidebar-summary.css";
+import "./print-card.css";
+import PrintButtonInterceptor from "./components/print-button-interceptor";
 import SiteFooter from "./components/site-footer";
-import ResultDownload from "./components/result-download";
-import SchoolLogoSync from "./components/school-logo-sync";
-import ResultCardStyles from "./components/result-card-styles";
-import SafeGlobalSettings from "./components/safe-global-settings";
-import PreviewDesignControl from "./components/preview-design-control";
 
 export const metadata: Metadata = {
   title: "Gradly — Academic Result Studio",
@@ -19,11 +17,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
       <body>
         <Suspense fallback={null}>
           {children}
-          <SchoolLogoSync />
-          <SafeGlobalSettings />
-          <PreviewDesignControl />
-          <ResultCardStyles />
-          <ResultDownload />
+          <PrintButtonInterceptor />
           <SiteFooter />
         </Suspense>
       </body>

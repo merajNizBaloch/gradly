@@ -1,0 +1,137 @@
+/* Dedicated result-card print layout.
+ * Screen layout stays unchanged; printing collapses Gradly down to the live card only.
+ * The selected paper size is supplied by ResultCard's dynamic @page rule.
+ */
+
+@media print {
+  @page {
+    size: auto;
+    margin: 0;
+  }
+
+  html,
+  body {
+    width: auto !important;
+    min-width: 0 !important;
+    height: auto !important;
+    min-height: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: visible !important;
+    background: #fff !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* Remove application chrome and anything outside the printable result. */
+  .no-print,
+  body > footer {
+    display: none !important;
+  }
+
+  main {
+    display: block !important;
+    width: auto !important;
+    min-width: 0 !important;
+    height: auto !important;
+    min-height: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: visible !important;
+    background: #fff !important;
+  }
+
+  /*
+   * Do not rely only on .no-print here. Explicitly remove the input/sidebar
+   * columns from the print formatting tree so they cannot create an extra page.
+   */
+  main > header,
+  main > header + div > aside,
+  main > header + div > section:not(:last-of-type) {
+    display: none !important;
+  }
+
+  /* Collapse the desktop three-column workspace to one printable document. */
+  main > header + div {
+    display: block !important;
+    position: static !important;
+    width: auto !important;
+    max-width: none !important;
+    height: auto !important;
+    min-height: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: visible !important;
+  }
+
+  /* Only the final live-preview section is printable. */
+  main > header + div > section:last-of-type {
+    display: block !important;
+    position: static !important;
+    width: auto !important;
+    max-width: none !important;
+    height: auto !important;
+    min-height: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: visible !important;
+    border: 0 !important;
+    background: #fff !important;
+    box-shadow: none !important;
+  }
+
+  main > header + div > section:last-of-type > .gradly-signature-scope {
+    display: block !important;
+    position: static !important;
+    width: auto !important;
+    height: auto !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: visible !important;
+  }
+
+  /* Strip the on-screen scroll/centering shell from the printed document. */
+  .gradly-card-scroll,
+  .print-shell {
+    display: block !important;
+    position: static !important;
+    width: auto !important;
+    max-width: none !important;
+    height: auto !important;
+    min-height: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: visible !important;
+    background: #fff !important;
+  }
+
+  .gradly-card-scroll > div {
+    display: block !important;
+    position: static !important;
+    width: auto !important;
+    min-width: 0 !important;
+    height: auto !important;
+    min-height: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  .gradly-paper {
+    margin: 0 !important;
+    box-shadow: none !important;
+    break-before: auto !important;
+    break-after: auto !important;
+    break-inside: avoid-page !important;
+    page-break-before: auto !important;
+    page-break-after: auto !important;
+    page-break-inside: avoid !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  .gradly-paper,
+  .gradly-paper * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+}

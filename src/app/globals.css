@@ -4,7 +4,12 @@
   --ink: #101828;
   --muted: #667085;
   --line: #e5e7eb;
-  --canvas: #f5f7fb;
+  --canvas: #f4f8fc;
+  --gradly-blue: #0f4aa8;
+  --gradly-blue-bright: #1d9bf0;
+  --gradly-blue-dark: #0b3477;
+  --gradly-teal: #11b8b2;
+  --gradly-wash: #eef6ff;
 }
 
 * { box-sizing: border-box; }
@@ -13,10 +18,55 @@ body { margin: 0; color: var(--ink); background: var(--canvas); font-family: Ari
 button, input { font: inherit; }
 button { cursor: pointer; }
 
+/* Gradly product chrome follows the logo palette while printable result themes remain independent. */
+header.no-print {
+  border-color: #d9e6f4 !important;
+  background: rgba(255,255,255,.96) !important;
+}
+
+header.no-print > div:first-child {
+  background: linear-gradient(90deg, var(--gradly-blue-dark), var(--gradly-blue) 42%, var(--gradly-blue-bright) 76%, var(--gradly-teal)) !important;
+}
+
+/* Replace the generic school icon in the main brand lockup with the supplied Gradly mark. */
+header.no-print > div:nth-child(2) > div:first-child > div:first-child {
+  background-color: transparent !important;
+  background-image: url('/gradly-logo.svg') !important;
+  background-repeat: no-repeat !important;
+  background-position: center !important;
+  background-size: contain !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+}
+
+header.no-print > div:nth-child(2) > div:first-child > div:first-child > svg {
+  display: none !important;
+}
+
+header.no-print + div > aside.no-print {
+  background: linear-gradient(180deg, var(--gradly-blue-dark) 0%, var(--gradly-blue) 100%) !important;
+  box-shadow: 0 18px 50px rgba(11,52,119,.18) !important;
+}
+
+/* Re-map the previous navy/gold product accents to the logo's blue/teal system. */
+[class*="bg-[#17365D]"] { background-color: var(--gradly-blue) !important; }
+[class*="text-[#17365D]"] { color: var(--gradly-blue) !important; }
+[class*="border-[#17365D]"] { border-color: var(--gradly-blue) !important; }
+[class*="hover:bg-[#102d50]"]:hover { background-color: var(--gradly-blue-dark) !important; }
+[class*="focus:border-[#17365D]"]:focus { border-color: var(--gradly-blue) !important; }
+[class*="focus:ring-[#17365D]"]:focus { --tw-ring-color: rgba(15,74,168,.12) !important; }
+[class*="text-[#a07b3f]"],
+[class*="text-[#9b753b]"],
+[class*="text-[#8c6a35]"],
+[class*="text-[#9a743b]"] { color: var(--gradly-teal) !important; }
+[class*="bg-[#f3eee4]"],
+[class*="bg-[#f8f4ec]"],
+[class*="bg-[#faf7f1]"] { background-color: #f3f8fd !important; }
+
 .workspace-grid {
   background-image:
-    linear-gradient(rgba(16,24,40,.035) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(16,24,40,.035) 1px, transparent 1px);
+    linear-gradient(rgba(15,74,168,.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(15,74,168,.035) 1px, transparent 1px);
   background-size: 24px 24px;
 }
 
@@ -137,8 +187,8 @@ section.no-print.space-y-4 > [data-gradly-sidebar-tabs-slot] > [data-gradly-side
 
 /* Active/completed steps retain only a subtle state treatment. */
 section.no-print.space-y-4 > [data-gradly-sidebar-tabs-slot] > [data-gradly-sidebar-tabs] > div:nth-child(2) > div > button.bg-white {
-  border-color: #17365d !important;
-  color: #17365d !important;
+  border-color: var(--gradly-blue) !important;
+  color: var(--gradly-blue) !important;
 }
 
 /* Back / Continue / finish controls are always below the form. */
@@ -188,5 +238,58 @@ section.no-print.space-y-4 > [data-gradly-sidebar-tabs-slot] > [data-gradly-step
   .result-paper {
     min-height: 277mm !important;
     break-inside: avoid;
+  }
+}
+
+/* Sharp Gradly UI: keep intentional circles/pills, reduce every other rounded treatment to 2px. */
+html body [class*="rounded-"]:not([class*="rounded-full"]) {
+  border-radius: 2px !important;
+}
+
+/*
+ * Paper-responsive result composition.
+ * Every result design is authored once on an A4 master canvas (210 x 297 mm).
+ * The selected paper acts only as the physical frame; the master is scaled and
+ * centered inside it, preserving typography, tables, signatures, and decoration.
+ */
+.gradly-paper {
+  container-type: size;
+  position: relative !important;
+  overflow: hidden !important;
+}
+
+.gradly-paper > div {
+  --gradly-paper-scale: 1;
+  position: absolute !important;
+  left: 50% !important;
+  top: 50% !important;
+  width: 210mm !important;
+  height: 297mm !important;
+  min-width: 210mm !important;
+  min-height: 297mm !important;
+  max-width: none !important;
+  max-height: none !important;
+  flex: none !important;
+  transform-origin: center center !important;
+  transform: translate(-50%, -50%) scale(var(--gradly-paper-scale)) !important;
+}
+
+/* Safe fallbacks for browsers without CSS typed arithmetic. */
+@container (max-width: 160mm) {
+  .gradly-paper > div { --gradly-paper-scale: .7047619; }
+}
+
+@container (min-width: 200mm) and (max-height: 285mm) {
+  .gradly-paper > div { --gradly-paper-scale: .94074; }
+}
+
+@container (min-width: 212mm) and (min-height: 330mm) {
+  .gradly-paper > div { --gradly-paper-scale: 1.02809; }
+}
+
+/* Dynamic best-fit scaling for A4, A5, Letter, Legal, and arbitrary Custom paper. */
+@supports (transform: scale(calc(100px / 100px))) {
+  .gradly-paper > div {
+    --gradly-paper-scale: min(calc(100cqw / 210mm), calc(100cqh / 297mm));
   }
 }
